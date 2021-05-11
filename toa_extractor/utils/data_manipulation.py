@@ -65,7 +65,7 @@ def read_calibration(pis, rmf_file):
 
 def get_events_from_fits(evfile):
     log.info(f"Opening file {evfile}")
-    events = EventList.read(evfile, format_='hea')
+    events = EventList.read(evfile, format_="hea")
 
     return events
 
@@ -93,11 +93,10 @@ def get_observing_info(evfile, hduname=1):
             mode = hdul[0].header[modekey].strip()
 
         if hduname is None:
-            hduname = get_key_from_mission_info(db, "events", "EVENTS", instr,
-                                                mode)
+            hduname = get_key_from_mission_info(db, "events", "EVENTS", instr, mode)
 
         if hduname not in hdul:
-            warnings.warn(f'HDU {hduname} not found. Trying first extension')
+            warnings.warn(f"HDU {hduname} not found. Trying first extension")
             hduname = 1
 
         hdu = hdul[hduname]
@@ -110,7 +109,7 @@ def get_observing_info(evfile, hduname=1):
         info["mjdref_highprec"] = high_precision_keyword_read(header, "MJDREF")
         info["mjdref"] = float(info["mjdref_highprec"])
         info["mode"] = mode
-        info["ephem"] = safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip('JPL-').lower()
+        info["ephem"] = safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip("JPL-").lower()
         info["timesys"] = safe_get_key(header, "TIMESYS", "TDB").strip().lower()
         info["timeref"] = safe_get_key(header, "TIMEREF", "SOLARSYSTEM").strip().lower()
         info["tstart"] = safe_get_key(header, "TSTART", None)

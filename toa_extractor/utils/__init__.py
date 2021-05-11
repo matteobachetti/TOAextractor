@@ -57,7 +57,7 @@ def root_name(filename):
     'file.1'
     """
     fname = filename
-    while os.path.splitext(fname)[1] in ['.gz', '.Z', '.zip', '.bz']:
+    while os.path.splitext(fname)[1] in [".gz", ".Z", ".zip", ".bz"]:
         fname = fname.replace(os.path.splitext(fname)[1], "")
     fname = os.path.splitext(fname)[0]
     return fname

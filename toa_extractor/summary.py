@@ -4,10 +4,10 @@ from .utils.config import load_yaml_file
 
 def main(args=None):
     import argparse
-    parser = \
-        argparse.ArgumentParser(description="Create summary table for toaextract")
 
-    parser.add_argument("files", help="Input binary files", type=str, nargs='+')
+    parser = argparse.ArgumentParser(description="Create summary table for toaextract")
+
+    parser.add_argument("files", help="Input binary files", type=str, nargs="+")
 
     args = parser.parse_args(args)
 

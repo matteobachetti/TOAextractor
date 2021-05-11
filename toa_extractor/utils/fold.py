@@ -37,19 +37,17 @@ def histogram(a, bins, ranges):
 @njit(parallel=True)
 def _fast_phase_fddot(ts, mean_f, mean_fdot=0, mean_fddot=0):
     tssq = ts * ts
-    phases = (
-        ts * mean_f
-        + 0.5 * tssq * mean_fdot
-        + ONE_SIXTH * tssq * ts * mean_fddot
-    )
+    phases = ts * mean_f + 0.5 * tssq * mean_fdot + ONE_SIXTH * tssq * ts * mean_fddot
     return phases - np.floor(phases)
 
 
 def calculate_phase(events_time, model):
-    return _fast_phase_fddot(events_time,
-                             model.F0.value.astype(np.double),
-                             model.F1.value.astype(np.double),
-                             model.F2.value.astype(np.double))
+    return _fast_phase_fddot(
+        events_time,
+        model.F0.value.astype(np.double),
+        model.F1.value.astype(np.double),
+        model.F2.value.astype(np.double),
+    )
 
 
 def calculate_profile(phase, nbin=512, expo=None):
@@ -59,9 +57,11 @@ def calculate_profile(phase, nbin=512, expo=None):
     if expo is not None:
         prof_corr = prof / expo
 
-    t = Table({'phase': np.linspace(0, 1, nbin + 1)[:-1], 'profile': prof_corr, 'profile_raw': prof})
+    t = Table(
+        {"phase": np.linspace(0, 1, nbin + 1)[:-1], "profile": prof_corr, "profile_raw": prof}
+    )
     if expo is not None:
-        t['expo'] = expo
+        t["expo"] = expo
 
     return t
 
@@ -69,14 +69,14 @@ def calculate_profile(phase, nbin=512, expo=None):
 def prepare_TOAs(mjds, ephem):
     toalist = _load_and_prepare_TOAs(mjds, ephem=ephem)
 
-    toalist.clock_corr_info['include_bipm'] = False
-    toalist.clock_corr_info['include_gps'] = False
+    toalist.clock_corr_info["include_bipm"] = False
+    toalist.clock_corr_info["include_gps"] = False
     return toalist
 
 
-def get_phase_from_ephemeris_file(mjdstart, mjdstop, parfile,
-                                  ntimes=1000, ephem="DE405",
-                                  return_pint_model=False):
+def get_phase_from_ephemeris_file(
+    mjdstart, mjdstop, parfile, ntimes=1000, ephem="DE405"
+):
     """Get a correction for orbital motion from pulsar parameter file.
 
     Parameters
@@ -96,7 +96,6 @@ def get_phase_from_ephemeris_file(mjdstart, mjdstop, parfile,
     correction_mjd : function
         Function that accepts times in MJDs and returns the deorbited times.
     """
-    from astropy import units
 
     mjds = np.linspace(mjdstart, mjdstop, ntimes)
 
@@ -105,7 +104,5 @@ def get_phase_from_ephemeris_file(mjdstart, mjdstop, parfile,
     phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))
     phases = phase_int + phase_frac
 
-    correction_mjd_rough = \
-        interp1d(mjds, phases,
-                  fill_value="extrapolate")
+    correction_mjd_rough = interp1d(mjds, phases, fill_value="extrapolate")
     return correction_mjd_rough
