@@ -24,7 +24,7 @@ class GetResidual(luigi.Task):
 
     def run(self):
         prof_file = GetFoldedProfile(self.fname, self.config_file, self.worker_timeout).output().path
-        prof_table = Table.read(prof_file, format="ascii.ecsv")
+        prof_table = Table.read(prof_file)
 
         template_file = GetTemplate(self.fname, self.config_file, self.worker_timeout).output().path
         template_table = Table.read(template_file, format="ascii.ecsv")
@@ -50,7 +50,7 @@ class GetFoldedProfile(luigi.Task):
         yield GetTemplate(self.fname, self.config_file, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(root_name(self.fname) + "_folded.ecsv")
+        return luigi.LocalTarget(root_name(self.fname) + "_folded.hdf5")
 
     def run(self):
         infofile = GetInfo(self.fname, self.config_file, self.worker_timeout).output().path
@@ -125,8 +125,7 @@ class GetInfo(luigi.Task):
 def main(args=None):
     import argparse
     parser = \
-        argparse.ArgumentParser(description="Automatic conversion from lv0 to "
-                                            "lv1")
+        argparse.ArgumentParser(description="Calculate TOAs from event files")
 
     parser.add_argument("files", help="Input binary files", type=str, nargs='+')
     parser.add_argument("--config", help="Config file", type=str,
