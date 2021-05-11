@@ -40,3 +40,26 @@ def read_config(config_file):
         except yaml.scanner.ScannerError as e:
             log.error(str(e))
     return parse_config_dict(config)
+
+
+def get_template(source, info=None):
+    source = source.lower()
+    curdir = os.path.abspath(os.path.dirname(__file__))
+    template_dir = os.path.join(curdir, "..", "data")
+    template_file = os.path.join(template_dir, "templates.yaml")
+    template_info = load_yaml_file(template_file)
+
+    if info is None:
+        for src in template_info:
+            if src.lower() in source:
+                print(src)
+                return os.path.join(template_dir, template_info[src])
+        else:
+            log.error(f"Template for {source} not found; using Crab")
+            return os.path.join(template_dir, template_info["crab"])
+    raise NotImplementedError("Templates can only be retrieved by source")
+
+
+def load_yaml_file(infofile):
+    with open(infofile) as fobj:
+        return yaml.load(fobj, Loader=yaml.Loader)

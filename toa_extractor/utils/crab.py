@@ -1,10 +1,3 @@
-import sys
-from astropy.io import fits
-from astropy.time import Time
-from astropy.coordinates import EarthLocation
-# from get_dead_time_corrected_pulse import *
-from hendrics.io import high_precision_keyword_read
-from hendrics.io import load_events_and_gtis, load_events, HEN_FILE_EXTENSION
 import os
 from astropy import log
 from urllib.request import urlopen

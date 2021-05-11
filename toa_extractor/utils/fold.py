@@ -2,6 +2,7 @@ from numba import njit
 import numpy as np
 from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
 from scipy.interpolate import interp1d
+from astropy.table import Table
 
 ONE_SIXTH = 1 / 6
 
@@ -52,7 +53,7 @@ def calculate_phase(events_time, model):
 
 
 def calculate_profile(phase, nbin=512, expo=None):
-    prof = histogram(phase, bins=nbin, ranges=[0, 1])
+    prof = histogram(phase.astype(float), bins=nbin, ranges=[0, 1])
     prof_corr = prof
 
     if expo is not None:

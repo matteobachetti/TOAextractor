@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 from stingray import EventList
 from stingray.io import read_mission_info, get_key_from_mission_info
+from stingray.io import high_precision_keyword_read
 from astropy import log
 from astropy.io import fits
 from . import safe_get_key
@@ -106,6 +107,8 @@ def get_observing_info(evfile, hduname=1):
         info["obsid"] = safe_get_key(hdu.header, "OBS_ID", "")
         info["mission"] = mission
         info["instrument"] = instr
+        info["mjdref_highprec"] = high_precision_keyword_read(header, "MJDREF")
+        info["mjdref"] = float(info["mjdref_highprec"])
         info["mode"] = mode
         info["ephem"] = safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip('JPL-').lower()
         info["timesys"] = safe_get_key(header, "PLEPHEM", "TDB").strip().lower()
@@ -115,5 +118,9 @@ def get_observing_info(evfile, hduname=1):
         info["source"] = safe_get_key(header, "OBJECT", None)
         info["ra"] = safe_get_key(header, "RA_OBJ", None)
         info["dec"] = safe_get_key(header, "DEC_OBJ", None)
+        info["mjdstart"] = info["tstart"] / 86400 + info["mjdref_highprec"]
+        info["mjdstop"] = info["tstop"] / 86400 + info["mjdref_highprec"]
+        MJD = (info["mjdstart"] + info["mjdstop"]) / 2
+        info["mjd"] = MJD
 
     return info
