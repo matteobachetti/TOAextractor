@@ -130,7 +130,7 @@ def main(args=None):
 
     parser.add_argument("files", help="Input binary files", type=str, nargs='+')
     parser.add_argument("--config", help="Config file", type=str,
-                        default=None, required=True)
+                        default=None)
     parser.add_argument("--logfile",
                         help="Log file (default "
                              "{sta_id}_{idigit}_YYYY-MM-DD.log)", type=str,
