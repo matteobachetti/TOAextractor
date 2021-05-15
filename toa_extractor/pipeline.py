@@ -135,30 +135,8 @@ def main(args=None):
     parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
-    parser.add_argument("--config", help="Config file", type=str, default=None)
-    parser.add_argument(
-        "--logfile",
-        help="Log file (default " "{sta_id}_{idigit}_YYYY-MM-DD.log)",
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        "--maxlevel",
-        help="Maximum processing level",
-        type=str,
-        default=None,
-        choices=["LV0", "LV0a", "LV1", "LV1a", "HM"],
-    )
-    parser.add_argument(
-        "-f",
-        "--force",
-        help="Force reprocessing of completed tasks",
-        action="store_true",
-        default=False,
-    )
-    parser.add_argument(
-        "--no-catch-log", help="Do not catch all logs", action="store_false", default=False
-    )
+    parser.add_argument("--config", help="Config file", type=str, default="none")
+
     args = parser.parse_args(args)
 
     config_file = args.config

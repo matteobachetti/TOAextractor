@@ -25,7 +25,7 @@ def histogram(a, bins, ranges):
     --------
     >>> x = np.random.uniform(0., 1., 100)
     >>> H, xedges = np.histogram(x, bins=5, range=[0., 1.])
-    >>> Hn = histogram(x, bins=5, ranges=[0., 1.], tmp='out.npy')
+    >>> Hn = histogram(x, bins=5, ranges=[0., 1.])
     >>> assert np.all(H == Hn)
     """
 

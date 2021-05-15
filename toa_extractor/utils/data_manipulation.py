@@ -78,8 +78,9 @@ def calibrate_events(events, rmf_file):
 def get_observing_info(evfile, hduname=1):
     import fitsio
     info = {}
-    with fitsio.FITS(evfile) as hdul:
-        header0 = hdul[0].read_header()
+
+    with fits.open(evfile) as hdul:
+        header0 = hdul[0].header
         mission_key = "MISSION"
         if mission_key not in header0:
             mission_key = "TELESCOP"
@@ -102,9 +103,14 @@ def get_observing_info(evfile, hduname=1):
             hduname = 1
 
         hdu = hdul[hduname]
-        header = hdu.read_header()
+        header = hdu.header
 
-        ctrate = header["NAXIS2"] / header["EXPOSURE"]
+        if "EXPOSURE" in header:
+            ctrate = header["NAXIS2"] / header["EXPOSURE"]
+        else:
+            # Need better estimate
+            ctrate = header["NAXIS2"] / (header["TSTOP"] - header["TSTART"])
+
         info["fname"] = os.path.abspath(evfile)
         info["obsid"] = safe_get_key(header, "OBS_ID", "")
         info["mission"] = mission
