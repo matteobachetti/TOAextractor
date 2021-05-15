@@ -36,6 +36,17 @@ def read_config(config_file):
     return parse_config_dict(config)
 
 
+def _get_mission_template(template_info, info):
+    if info["mission"] not in template_info:
+        log.info(f"No specific template for {info['mission']}. Using default")
+        return template_info["default"]
+    template_info = template_info[info["mission"]]
+    if isinstance(template_info, str):
+        return template_info
+    else:
+        return template_info["default"]
+
+
 def get_template(source, info=None):
     source = source.lower()
     curdir = os.path.abspath(os.path.dirname(__file__))
@@ -43,15 +54,13 @@ def get_template(source, info=None):
     template_file = os.path.join(template_dir, "templates.yaml")
     template_info = load_yaml_file(template_file)
 
-    if info is None:
-        for src in template_info:
-            if src.lower() in source:
-                print(src)
-                return os.path.join(template_dir, template_info[src])
-        else:
-            log.error(f"Template for {source} not found; using Crab")
-            return os.path.join(template_dir, template_info["crab"])
-    raise NotImplementedError("Templates can only be retrieved by source")
+    for src in template_info:
+        if src.lower() in source:
+            template = _get_mission_template(template_info[src], info)
+            return os.path.join(template_dir, template)
+    else:
+        log.error(f"Template for {source} not found; using Crab")
+        return os.path.join(template_dir, template_info["crab"]["default"])
 
 
 def load_yaml_file(infofile):

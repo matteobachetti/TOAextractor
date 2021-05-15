@@ -111,7 +111,7 @@ class GetTemplate(luigi.Task):
     def run(self):
         infofile = GetInfo(self.fname, self.config_file, self.worker_timeout).output().path
         info = load_yaml_file(infofile)
-        template_file = get_template(info["source"])
+        template_file = get_template(info["source"], info)
         shutil.copyfile(template_file, self.output().path)
 
 

@@ -76,21 +76,23 @@ def calibrate_events(events, rmf_file):
 
 
 def get_observing_info(evfile, hduname=1):
+    import fitsio
     info = {}
-    with fits.open(evfile, memmap=False) as hdul:
+    with fitsio.FITS(evfile) as hdul:
+        header0 = hdul[0].read_header()
         mission_key = "MISSION"
-        if mission_key not in hdul[0].header:
+        if mission_key not in header0:
             mission_key = "TELESCOP"
-        mission = hdul[0].header[mission_key].lower()
+        mission = header0[mission_key].lower()
         db = read_mission_info(mission)
         instkey = get_key_from_mission_info(db, "instkey", "INSTRUME")
         instr = mode = None
-        if instkey in hdul[0].header:
-            instr = hdul[0].header[instkey].strip()
+        if instkey in header0:
+            instr = header0[instkey].strip()
 
         modekey = get_key_from_mission_info(db, "dmodekey", None, instr)
-        if modekey is not None and modekey in hdul[0].header:
-            mode = hdul[0].header[modekey].strip()
+        if modekey is not None and modekey in header0:
+            mode = header0[modekey].strip()
 
         if hduname is None:
             hduname = get_key_from_mission_info(db, "events", "EVENTS", instr, mode)
@@ -100,10 +102,11 @@ def get_observing_info(evfile, hduname=1):
             hduname = 1
 
         hdu = hdul[hduname]
-        header = hdu.header
+        header = hdu.read_header()
 
+        ctrate = header["NAXIS2"] / header["EXPOSURE"]
         info["fname"] = os.path.abspath(evfile)
-        info["obsid"] = safe_get_key(hdu.header, "OBS_ID", "")
+        info["obsid"] = safe_get_key(header, "OBS_ID", "")
         info["mission"] = mission
         info["instrument"] = instr
         info["mjdref_highprec"] = high_precision_keyword_read(header, "MJDREF")
@@ -121,5 +124,6 @@ def get_observing_info(evfile, hduname=1):
         info["mjdstop"] = info["tstop"] / 86400 + info["mjdref_highprec"]
         MJD = (info["mjdstart"] + info["mjdstop"]) / 2
         info["mjd"] = MJD
+        info["countrate"] = float(ctrate)
 
     return info
