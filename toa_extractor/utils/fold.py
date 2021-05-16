@@ -74,9 +74,7 @@ def prepare_TOAs(mjds, ephem):
     return toalist
 
 
-def get_phase_from_ephemeris_file(
-    mjdstart, mjdstop, parfile, ntimes=1000, ephem="DE405"
-):
+def get_phase_from_ephemeris_file(mjdstart, mjdstop, parfile, ntimes=1000, ephem="DE405"):
     """Get a correction for orbital motion from pulsar parameter file.
 
     Parameters

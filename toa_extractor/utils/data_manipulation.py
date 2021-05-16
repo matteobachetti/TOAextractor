@@ -76,7 +76,6 @@ def calibrate_events(events, rmf_file):
 
 
 def get_observing_info(evfile, hduname=1):
-    import fitsio
     info = {}
 
     with fits.open(evfile) as hdul:
