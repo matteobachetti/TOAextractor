@@ -1,7 +1,7 @@
 import os
 import glob
 import pytest
-from toa_extractor.pipeline import main
+from toa_extractor.pipeline import main, GetResidual, get_outputs
 
 
 class TestPipeline(object):
@@ -15,5 +15,16 @@ class TestPipeline(object):
         files = glob.glob(os.path.join(self.datadir, f"{mission}_test.*"))
         for f in files:
             for ext in [".evt", ".fits", ".ds"]:
-                if ext in f:
-                    main([f])
+                if ext not in f:
+                    continue
+                main([f])
+                outputs = get_outputs(GetResidual(f, "none"))
+                for outf in outputs:
+                    assert os.path.exists(outf)
+                    os.unlink(outf)
+
+    @classmethod
+    def teardown_class(cls):
+        for ext in ["info", "template", "par"]:
+            for product in glob.glob(os.path.join(cls.datadir, f"*.{ext}")):
+                os.unlink(product)

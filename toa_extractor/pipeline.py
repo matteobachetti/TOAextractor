@@ -129,6 +129,20 @@ class GetInfo(luigi.Task):
             yaml.dump(info, f, default_flow_style=False, sort_keys=False)
 
 
+def get_outputs(task):
+    """Get all outputs from a given luigi task and his dependencies."""
+    outputs = []
+    local_require = task
+    while 1:
+        try:
+            outputs.append(local_require.output().path)
+            local_require = local_require.requires()
+        except AttributeError:
+            break
+
+    return outputs
+
+
 def main(args=None):
     import argparse
 
