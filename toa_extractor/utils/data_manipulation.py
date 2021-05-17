@@ -63,9 +63,14 @@ def read_calibration(pis, rmf_file):
     return es
 
 
-def get_events_from_fits(evfile):
+def get_events_from_fits(evfile, max_events=5000000):
     log.info(f"Opening file {evfile}")
     events = EventList.read(evfile, format_="hea")
+
+    events.time = events.time[:max_events]
+    for attr in ["pi", "cal_pi", "pha"]:
+        if hasattr(events, attr):
+            setattr(events, attr, getattr(events, attr)[:max_events])
 
     return events
 
