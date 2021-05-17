@@ -2,6 +2,7 @@ import shutil
 import numpy as np
 import luigi
 import yaml
+import warnings
 from astropy.table import Table
 from stingray.pulse.pulsar import get_model
 from stingray.pulse.pulsar import fftfit
@@ -91,8 +92,15 @@ class GetParfile(luigi.Task):
     def run(self):
         infofile = GetInfo(self.fname, self.config_file, self.worker_timeout).output().path
         info = load_yaml_file(infofile)
-        if "crab" not in info["source"].lower():
-            raise ValueError("Parfiles only available for the Crab")
+        crab_names = ["crab", "b0531+21", "j0534+22"]
+        found_crab = False
+        for name in crab_names:
+            if name in info["source"].lower():
+                found_crab = True
+                break
+
+        if not found_crab:
+            warnings.warn("Parfiles only available for the Crab")
 
         get_crab_ephemeris(info["mjd"], fname=self.output().path)
 

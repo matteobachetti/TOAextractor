@@ -13,7 +13,7 @@ class TestPipeline(object):
         cls.curdir = os.path.dirname(__file__)
         cls.datadir = os.path.join(cls.curdir, "data")
 
-    @pytest.mark.parametrize("mission", ["nustar", "astrosat"])
+    @pytest.mark.parametrize("mission", ["nicer", "nustar", "astrosat"])
     def test_pipeline(self, mission):
         files = glob.glob(os.path.join(self.datadir, f"{mission}_test.*"))
         for f in files:
