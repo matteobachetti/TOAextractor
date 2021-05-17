@@ -63,16 +63,252 @@ def read_calibration(pis, rmf_file):
     return es
 
 
+def load_events_and_gtis(
+    fits_file,
+    additional_columns=None,
+    gtistring=None,
+    gti_file=None,
+    hduname=None,
+    column=None,
+    max_events=1e32
+):
+    """Load event lists and GTIs from one or more files.
+
+    Loads event list from HDU EVENTS of file fits_file, with Good Time
+    intervals. Optionally, returns additional columns of data from the same
+    HDU of the events.
+
+    Parameters
+    ----------
+    fits_file : str
+
+    Other parameters
+    ----------------
+    additional_columns: list of str, optional
+        A list of keys corresponding to the additional columns to extract from
+        the event HDU (ex.: ['PI', 'X'])
+    gtistring : str
+        Comma-separated list of accepted GTI extensions (default GTI,STDGTI),
+        with or without appended integer number denoting the detector
+    gti_file : str, default None
+        External GTI file
+    hduname : str or int, default 1
+        Name of the HDU containing the event list
+    column : str, default None
+        The column containing the time values. If None, we use the name
+        specified in the mission database, and if there is nothing there,
+        "TIME"
+    return_limits: bool, optional
+        Return the TSTART and TSTOP keyword values
+
+    Returns
+    -------
+    retvals : Object with the following attributes:
+        ev_list : array-like
+            Event times in Mission Epoch Time
+        gti_list: [[gti0_0, gti0_1], [gti1_0, gti1_1], ...]
+            GTIs in Mission Epoch Time
+        additional_data: dict
+            A dictionary, where each key is the one specified in additional_colums.
+            The data are an array with the values of the specified column in the
+            fits file.
+        t_start : float
+            Start time in Mission Epoch Time
+        t_stop : float
+            Stop time in Mission Epoch Time
+        pi_list : array-like
+            Raw Instrument energy channels
+        cal_pi_list : array-like
+            Calibrated PI channels (those that can be easily converted to energy
+            values, regardless of the instrument setup.)
+        energy_list : array-like
+            Energy of each photon in keV (only for NuSTAR, NICER, XMM)
+        instr : str
+            Name of the instrument (e.g. EPIC-pn or FPMA)
+        mission : str
+            Name of the instrument (e.g. XMM or NuSTAR)
+        mjdref : float
+            MJD reference time for the mission
+        header : str
+            Full header of the FITS file, for debugging purposes
+        detector_id : array-like, int
+            Detector id for each photon (e.g. each of the CCDs composing XMM's or
+            Chandra's instruments)
+    """
+    from astropy.io import fits as pf
+    from stingray.io import rough_calibration, get_gti_from_all_extensions
+    from stingray.io import load_gtis, _get_additional_data, AstropyUserWarning
+    from stingray.io import order_list_of_arrays, EventReadOutput
+
+    hdulist = pf.open(fits_file)
+    probe_header = hdulist[0].header
+    # Let's look for TELESCOP here. This is the most common keyword to be
+    # found in well-behaved headers. If it is not in header 0, I take this key
+    # and the remaining information from header 1.
+    if "TELESCOP" not in probe_header:
+        probe_header = hdulist[1].header
+    mission_key = "MISSION"
+    if mission_key not in probe_header:
+        mission_key = "TELESCOP"
+    mission = probe_header[mission_key].lower()
+    db = read_mission_info(mission)
+    instkey = get_key_from_mission_info(db, "instkey", "INSTRUME")
+    instr = mode = None
+    if instkey in probe_header:
+        instr = probe_header[instkey].strip()
+
+    modekey = get_key_from_mission_info(db, "dmodekey", None, instr)
+    if modekey is not None and modekey in probe_header:
+        mode = probe_header[modekey].strip()
+
+    gtistring = get_key_from_mission_info(db, "gti", "GTI,STDGTI", instr, mode)
+    if hduname is None:
+        hduname = get_key_from_mission_info(db, "events", "EVENTS", instr, mode)
+
+    if hduname not in hdulist:
+        warnings.warn(f'HDU {hduname} not found. Trying first extension')
+        hduname = 1
+
+    datatable = hdulist[hduname].data
+    header = hdulist[hduname].header
+
+    ephem = timeref = timesys = None
+
+    if "PLEPHEM" in header:
+        ephem = header["PLEPHEM"].strip().lstrip('JPL-').lower()
+    if "TIMEREF" in header:
+        timeref = header["TIMEREF"].strip().lower()
+    if "TIMESYS" in header:
+        timesys = header["TIMESYS"].strip().lower()
+
+    if column is None:
+        column = get_key_from_mission_info(db, "time", "TIME", instr, mode)
+    ev_list = np.array(datatable.field(column), dtype=np.longdouble)
+
+    detector_id = None
+    ckey = get_key_from_mission_info(db, "ccol", "NONE", instr, mode)
+    if ckey != "NONE":
+        detector_id = datatable.field(ckey)
+    det_number = None if detector_id is None else list(set(detector_id))
+
+    timezero = np.longdouble(0.)
+    if "TIMEZERO" in header:
+        timezero = np.longdouble(header["TIMEZERO"])
+
+    if max_events is not None:
+        ev_list = ev_list[:max_events]
+        if detector_id is not None:
+            detector_id = detector_id[:max_events]
+
+    ev_list += timezero
+
+    t_start = ev_list[0]
+    t_stop = ev_list[-1]
+    if "TSTART" in header:
+        t_start = np.longdouble(header["TSTART"])
+    if "TSTOP" in header:
+        t_stop = np.longdouble(header["TSTOP"])
+
+    mjdref = np.longdouble(high_precision_keyword_read(header, "MJDREF"))
+
+    # Read and handle GTI extension
+    accepted_gtistrings = gtistring.split(",")
+
+    if gti_file is None:
+        # Select first GTI with accepted name
+        try:
+            gti_list = get_gti_from_all_extensions(
+                hdulist,
+                accepted_gtistrings=accepted_gtistrings,
+                det_numbers=det_number,
+            )
+        except Exception:  # pragma: no cover
+            warnings.warn(
+                "No extensions found with a valid name. "
+                "Please check the `accepted_gtistrings` values.",
+                AstropyUserWarning,
+            )
+            gti_list = np.array([[t_start, t_stop]], dtype=np.longdouble)
+    else:
+        gti_list = load_gtis(gti_file, gtistring)
+
+    pi_col = get_key_from_mission_info(db, "ecol", "PI", instr, mode)
+    if additional_columns is None:
+        additional_columns = [pi_col]
+    if pi_col not in additional_columns:
+        additional_columns.append(pi_col)
+
+    additional_data = _get_additional_data(datatable, additional_columns)
+    if max_events is not None:
+        for col in additional_data.keys():
+            additional_data[col] = additional_data[col][:max_events]
+
+    hdulist.close()
+    # Sort event list
+    order = np.argsort(ev_list)
+    ev_list = ev_list[order]
+    if detector_id is not None:
+        detector_id = detector_id[order]
+
+    additional_data = order_list_of_arrays(additional_data, order)
+
+    pi = additional_data[pi_col].astype(np.float32)
+    cal_pi = pi
+
+    # EventReadOutput() is an empty class. We will assign a number of attributes to
+    # it, like the arrival times of photons, the energies, and some information
+    # from the header.
+    returns = EventReadOutput()
+
+    returns.ev_list = ev_list
+    returns.gti_list = gti_list
+    returns.pi_list = pi
+    returns.cal_pi_list = cal_pi
+    if "energy" in additional_data:
+        returns.energy_list = additional_data["energy"]
+    else:
+        try:
+            returns.energy_list = rough_calibration(cal_pi, mission)
+        except ValueError:
+            returns.energy_list = None
+    returns.instr = instr.lower()
+    returns.mission = mission.lower()
+    returns.mjdref = mjdref
+    returns.header = header.tostring()
+    returns.additional_data = additional_data
+    returns.t_start = t_start
+    returns.t_stop = t_stop
+    returns.detector_id = detector_id
+    returns.ephem = ephem
+    returns.timeref = timeref
+    returns.timesys = timesys
+
+    return returns
+
+
 def get_events_from_fits(evfile, max_events=5000000):
     log.info(f"Opening file {evfile}")
-    events = EventList.read(evfile, format_="hea")
 
-    events.time = events.time[:max_events]
-    for attr in ["pi", "cal_pi", "pha"]:
-        if hasattr(events, attr):
-            setattr(events, attr, getattr(events, attr)[:max_events])
+    evtdata = load_events_and_gtis(evfile, max_events=max_events)
 
-    return events
+    evt = EventList(time=evtdata.ev_list,
+                    gti=evtdata.gti_list,
+                    pi=evtdata.pi_list,
+                    energy=evtdata.energy_list,
+                    mjdref=evtdata.mjdref,
+                    instr=evtdata.instr,
+                    mission=evtdata.mission,
+                    header=evtdata.header,
+                    detector_id=evtdata.detector_id,
+                    ephem=evtdata.ephem,
+                    timeref=evtdata.timeref,
+                    timesys=evtdata.timesys)
+
+    # if 'additional_columns' in kwargs:
+    #     for key in evtdata.additional_data:
+    #         if not hasattr(evt, key.lower()):
+    #             setattr(evt, key.lower(), evtdata.additional_data[key])
+    return evt
 
 
 def calibrate_events(events, rmf_file):
