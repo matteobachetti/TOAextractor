@@ -47,7 +47,7 @@ class PlotDiagnostics(luigi.Task):
         tphase = template_table["phase"]
         tphase = np.concatenate([tphase - 1, tphase])
         temp = template_table["profile"] - template_table["profile"].min()
-        temp /= temp.max()
+        temp = temp / temp.max()
         temp = np.concatenate([temp, temp])
 
         plt.plot(pphase / prof_table.meta["F0"], prof, color="red")
