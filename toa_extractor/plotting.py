@@ -38,6 +38,7 @@ def main(args=None):
         ("MJD", "@mjd"),
         ("Instrument", "@instrument"),
         ("Residual", "@residual"),
+        ("ObsID", "@obsid"),
     ]
 
     p.add_tools(hover)

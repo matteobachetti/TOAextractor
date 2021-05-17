@@ -6,11 +6,59 @@ import warnings
 from astropy.table import Table
 from stingray.pulse.pulsar import get_model
 from stingray.pulse.pulsar import fftfit
+import matplotlib.pyplot as plt
 from .utils.crab import get_crab_ephemeris
 from .utils import root_name
 from .utils.data_manipulation import get_observing_info, get_events_from_fits
 from .utils.config import get_template, load_yaml_file
 from .utils.fold import calculate_profile, get_phase_from_ephemeris_file
+
+
+class PlotDiagnostics(luigi.Task):
+    fname = luigi.Parameter()
+    config_file = luigi.Parameter()
+    worker_timeout = luigi.IntParameter(default=600)
+    def requires(self):
+        return GetResidual(self.fname, self.config_file, self.worker_timeout)
+
+    def output(self):
+        return luigi.LocalTarget(root_name(self.fname) + "_diagnostics.jpg")
+
+    def run(self):
+        prof_file = (
+            GetFoldedProfile(self.fname, self.config_file, self.worker_timeout).output().path
+        )
+        prof_table = Table.read(prof_file)
+
+        template_file = GetTemplate(self.fname, self.config_file, self.worker_timeout).output().path
+        template_table = Table.read(template_file, format="ascii.ecsv")
+
+        residual_file = GetResidual(self.fname, self.config_file, self.worker_timeout).output().path
+        residual_dict = load_yaml_file(residual_file)
+
+        plt.figure()
+        pphase = prof_table["phase"]
+        pphase = np.concatenate([pphase -1, pphase])
+        prof = prof_table["profile"] - prof_table["profile"].min()
+        prof /= prof.max()
+        prof = np.concatenate([prof, prof])
+
+        tphase = template_table["phase"]
+        tphase = np.concatenate([tphase -1, tphase])
+        temp = template_table["profile"] - template_table["profile"].min()
+        temp /= temp.max()
+        temp = np.concatenate([temp, temp])
+
+        plt.plot(pphase / prof_table.meta["F0"], prof, color="red")
+        plt.plot(tphase / prof_table.meta["F0"], temp, color="k", zorder=1)
+
+        minres = residual_dict["residual"] - residual_dict["residual_err"]
+        maxres = residual_dict["residual"] + residual_dict["residual_err"]
+        plt.axvspan(minres, maxres, color="#aaaaff", alpha=0.3)
+        plt.xlabel("Time (s)")
+        plt.ylabel("Flux (arbitrary units)")
+
+        plt.savefig(self.output().path)
 
 
 class GetResidual(luigi.Task):
@@ -164,7 +212,7 @@ def main(args=None):
     config_file = args.config
 
     _ = luigi.build(
-        [GetResidual(fname, config_file) for fname in args.files],
+        [PlotDiagnostics(fname, config_file) for fname in args.files],
         local_scheduler=True,
         log_level="INFO",
         workers=4,
