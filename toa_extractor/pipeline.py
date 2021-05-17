@@ -36,7 +36,7 @@ class PlotDiagnostics(luigi.Task):
         residual_file = GetResidual(self.fname, self.config_file, self.worker_timeout).output().path
         residual_dict = load_yaml_file(residual_file)
 
-        plt.figure()
+        fig = plt.figure()
         pphase = prof_table["phase"]
         pphase = np.concatenate([pphase -1, pphase])
         prof = prof_table["profile"] - prof_table["profile"].min()
@@ -59,6 +59,7 @@ class PlotDiagnostics(luigi.Task):
         plt.ylabel("Flux (arbitrary units)")
 
         plt.savefig(self.output().path)
+        plt.close(fig)
 
 
 class GetResidual(luigi.Task):
