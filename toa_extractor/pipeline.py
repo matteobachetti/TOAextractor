@@ -18,6 +18,7 @@ class PlotDiagnostics(luigi.Task):
     fname = luigi.Parameter()
     config_file = luigi.Parameter()
     worker_timeout = luigi.IntParameter(default=600)
+
     def requires(self):
         return GetResidual(self.fname, self.config_file, self.worker_timeout)
 
@@ -38,13 +39,13 @@ class PlotDiagnostics(luigi.Task):
 
         fig = plt.figure()
         pphase = prof_table["phase"]
-        pphase = np.concatenate([pphase -1, pphase])
+        pphase = np.concatenate([pphase - 1, pphase])
         prof = prof_table["profile"] - prof_table["profile"].min()
         prof /= prof.max()
         prof = np.concatenate([prof, prof])
 
         tphase = template_table["phase"]
-        tphase = np.concatenate([tphase -1, tphase])
+        tphase = np.concatenate([tphase - 1, tphase])
         temp = template_table["profile"] - template_table["profile"].min()
         temp /= temp.max()
         temp = np.concatenate([temp, temp])
