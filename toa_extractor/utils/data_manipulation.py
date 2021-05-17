@@ -80,9 +80,12 @@ def get_observing_info(evfile, hduname=1):
 
     with fits.open(evfile) as hdul:
         header0 = hdul[0].header
+        header1 = hdul[0].header
         mission_key = "MISSION"
-        if mission_key not in header0:
+        if mission_key not in header0 and mission_key not in header1:
             mission_key = "TELESCOP"
+        if mission_key not in header0:
+            header0 = header1
         mission = header0[mission_key].lower()
         db = read_mission_info(mission)
         instkey = get_key_from_mission_info(db, "instkey", "INSTRUME")
