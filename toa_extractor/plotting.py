@@ -1,5 +1,5 @@
 import pandas as pd
-from bokeh.plotting import figure, output_file, show
+from bokeh.plotting import figure, output_file, show, save
 from bokeh.models.tools import HoverTool
 from bokeh.transform import factor_cmap
 
@@ -42,5 +42,7 @@ def main(args=None):
 
     p.add_tools(hover)
 
+    output_file("summary.html")
+    save(p)
     if not args.test:
         show(p)
