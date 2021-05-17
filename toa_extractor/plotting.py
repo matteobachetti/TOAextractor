@@ -10,6 +10,7 @@ def main(args=None):
     parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
 
     parser.add_argument("file", help="Input summary CSV file", type=str)
+    parser.add_argument("--test", action="store_true", default=False)
 
     args = parser.parse_args(args)
 
@@ -41,4 +42,5 @@ def main(args=None):
 
     p.add_tools(hover)
 
-    show(p)
+    if not args.test:
+        show(p)
