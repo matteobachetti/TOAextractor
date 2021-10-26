@@ -183,7 +183,7 @@ def load_events_and_gtis(
 
     if column is None:
         column = get_key_from_mission_info(db, "time", "TIME", instr, mode)
-    
+
     if column not in datatable.columns.names:
         if "TDB" in datatable.columns.names:
             column = "TDB"
