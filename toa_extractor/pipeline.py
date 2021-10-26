@@ -6,7 +6,7 @@ import warnings
 from astropy.table import Table
 from stingray.pulse.pulsar import get_model
 from stingray.pulse.pulsar import fftfit
-from stingray.events import EventList
+# from stingray.events import EventList
 import matplotlib.pyplot as plt
 from .utils.crab import get_crab_ephemeris
 from .utils import root_name
