@@ -10,7 +10,7 @@ from stingray.events import EventList
 import matplotlib.pyplot as plt
 from .utils.crab import get_crab_ephemeris
 from .utils import root_name
-from .utils.data_manipulation import get_observing_info #, get_events_from_fits
+from .utils.data_manipulation import get_observing_info, get_events_from_fits
 from .utils.config import get_template, load_yaml_file
 from .utils.fold import calculate_profile, get_phase_from_ephemeris_file
 
@@ -110,7 +110,7 @@ class GetFoldedProfile(luigi.Task):
     def run(self):
         infofile = GetInfo(self.fname, self.config_file, self.worker_timeout).output().path
         info = load_yaml_file(infofile)
-        events = EventList.read(self.fname, format_="hea")
+        events = get_events_from_fits(self.fname)
         mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
         parfile = GetParfile(self.fname, self.config_file, self.worker_timeout).output().path
         correction_fun = get_phase_from_ephemeris_file(
