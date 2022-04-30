@@ -48,7 +48,7 @@ def _get_mission_template(template_info, info):
 
 
 def get_template(source, info=None):
-    source = source.lower()
+    source = source.lower() if source is not None else ""
     curdir = os.path.abspath(os.path.dirname(__file__))
     template_dir = os.path.join(curdir, "..", "data")
     template_file = os.path.join(template_dir, "templates.yaml")
