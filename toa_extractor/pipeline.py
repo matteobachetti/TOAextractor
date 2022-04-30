@@ -145,8 +145,9 @@ class GetParfile(luigi.Task):
         info = load_yaml_file(infofile)
         crab_names = ["crab", "b0531+21", "j0534+22"]
         found_crab = False
+        name_compare = info["source"].lower() if info["source"] is not None else ""
         for name in crab_names:
-            if name in info["source"].lower():
+            if name in name_compare:
                 found_crab = True
                 break
 
