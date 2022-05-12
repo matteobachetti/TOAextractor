@@ -2,10 +2,11 @@ import os
 from astropy import log
 from urllib.request import urlopen
 from astropy.table import Table
+from astroquery.heasarc import Heasarc
 import numpy as np
 
 
-def retrieve_ephemeris():
+def retrieve_cgro_ephemeris():
     file_name = "Crab.gro"
     url = "http://www.jb.man.ac.uk/pulsar/crab/all.gro"
 
@@ -29,14 +30,14 @@ def retrieve_ephemeris():
     return Table.read(file_name, format="ascii.fixed_width_two_line")
 
 
-def get_best_ephemeris(MJD):
+def get_best_cgro_ephemeris(MJD):
     """
 
     From the instructions:
     http://www.jb.man.ac.uk/research/pulsar/crab/CGRO_format.html
     the integer part of the *geocentric* TOA time is also the *TDB*(!) PEPOCH for the ephemeris.
     """
-    table = retrieve_ephemeris()
+    table = retrieve_cgro_ephemeris()
     good = (MJD >= table["MJD1"]) & (MJD < table["MJD2"] + 1)
     if not np.any(good):
         return None
@@ -51,23 +52,54 @@ def get_best_ephemeris(MJD):
     return result
 
 
+def get_best_txt_ephemeris(mjd):
+    """Uses the astroquery.heasarc interface."""
+    heasarc = Heasarc()
+    table = heasarc.query_object("Crab", mission="crabtime", fields="All")
+    good = np.argmin(np.abs(mjd - table["MJD"]))
+    row = table[good]
+
+    pepoch = row["MJD"] + row["JPL_TIME"] / 86400
+    f = row["NU"]
+    fd = row["NU_DOT"]
+    p, pd = 1/f, -1 / f**2 * fd
+
+    # F2 is calculated from P0, P1, as per instructions
+    fdd = 2.0 * pd**2 / p**3
+
+    result = type("result", (object,), {})()
+    result.F0 = f
+    result.F1 = fd
+    result.F2 = fdd
+
+    result.TZRMJD = pepoch
+    result.TZRSITE = "@"
+    result.PEPOCH = pepoch
+
+    return result
+
+
 def get_crab_ephemeris(MJD, fname=None):
     log.info("Getting correct ephemeris")
-    ephem = get_best_ephemeris(MJD)
+    ephem_cgro = get_best_cgro_ephemeris(MJD)
+    ephem_txt = get_best_txt_ephemeris(MJD)
 
     if fname is None:
-        fname = f"Crab_{ephem.PEPOCH}.par"
+        fname = f"Crab_{ephem_txt.PEPOCH}.par"
 
     with open(fname, "w") as fobj:
         print("PSRJ            J0534+2200", file=fobj)
         print("RAJ             05:34:31.973", file=fobj)
         print("DECJ            +22:00:52.06", file=fobj)
-        print("PEPOCH          ", ephem.PEPOCH, file=fobj)
-        print("F0              ", ephem.F0, file=fobj)
-        print("F1              ", ephem.F1, file=fobj)
-        print("F2              ", ephem.F2, file=fobj)
-        print("TZRMJD          ", ephem.TZRMJD, file=fobj)
-        print("TZRSITE         ", ephem.TZRSITE, file=fobj)
+        print("PEPOCH          ", ephem_txt.PEPOCH, file=fobj)
+        print("F0              ", ephem_txt.F0, file=fobj)
+        print("F1              ", ephem_txt.F1, file=fobj)
+        print("F2              ", ephem_txt.F2, file=fobj)
+        print("TZRMJD          ", ephem_cgro.TZRMJD, file=fobj)
+        print("TZRSITE         ", ephem_cgro.TZRSITE, file=fobj)
+        print("TZRFRQ          0", file=fobj)
         print("EPHEM           DE200", file=fobj)
+        print("UNITS           TDB", file=fobj)
+        print("CLK             TT(TAI)", file=fobj)
 
-    return ephem
+    return ephem_txt
