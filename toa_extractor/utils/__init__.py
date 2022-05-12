@@ -61,3 +61,21 @@ def root_name(filename):
         fname = fname.replace(os.path.splitext(fname)[1], "")
     fname = os.path.splitext(fname)[0]
     return fname
+
+
+def output_name(filename, version, suffix):
+    """Return the root file name (without _ev, _lc, etc.).
+
+    Parameters
+    ----------
+    filename : str
+
+    Examples
+    --------
+    >>> output_name("file.evt.gz", "v3", "folded.h5")
+    'file_v3_folded.h5'
+    """
+    newf = root_name(filename)
+    if version is not None or version != "none":
+        newf += "_" + version.lstrip("_")
+    return newf + suffix
