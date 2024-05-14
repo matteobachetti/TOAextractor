@@ -6,6 +6,7 @@ import warnings
 from astropy.table import Table
 from stingray.pulse.pulsar import get_model
 from stingray.pulse.pulsar import fftfit
+
 # from stingray.events import EventList
 import matplotlib.pyplot as plt
 from .utils.crab import get_crab_ephemeris
@@ -22,21 +23,37 @@ class PlotDiagnostics(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetResidual(self.fname, self.config_file, self.worker_timeout)
+        return GetResidual(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
 
     def output(self):
-        return luigi.LocalTarget(output_name(self.fname, self.version, "_diagnostics.jpg"))
+        return luigi.LocalTarget(
+            output_name(self.fname, self.version, "_diagnostics.jpg")
+        )
 
     def run(self):
         prof_file = (
-            GetFoldedProfile(self.fname, self.config_file, self.worker_timeout).output().path
+            GetFoldedProfile(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
+            .output()
+            .path
         )
         prof_table = Table.read(prof_file)
 
-        template_file = GetTemplate(self.fname, self.config_file, self.worker_timeout).output().path
+        template_file = (
+            GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
         template_table = Table.read(template_file, format="ascii.ecsv")
 
-        residual_file = GetResidual(self.fname, self.config_file, self.worker_timeout).output().path
+        residual_file = (
+            GetResidual(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
         residual_dict = load_yaml_file(residual_file)
 
         fig = plt.figure()
@@ -72,18 +89,30 @@ class GetResidual(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetFoldedProfile(self.fname, self.config_file, self.worker_timeout)
+        return GetFoldedProfile(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
 
     def output(self):
-        return luigi.LocalTarget(output_name(self.fname, self.version, "_residual.yaml"))
+        return luigi.LocalTarget(
+            output_name(self.fname, self.version, "_residual.yaml")
+        )
 
     def run(self):
         prof_file = (
-            GetFoldedProfile(self.fname, self.config_file, self.worker_timeout).output().path
+            GetFoldedProfile(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
+            .output()
+            .path
         )
         prof_table = Table.read(prof_file)
 
-        template_file = GetTemplate(self.fname, self.config_file, self.worker_timeout).output().path
+        template_file = (
+            GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
         template_table = Table.read(template_file, format="ascii.ecsv")
 
         prof = prof_table["profile"]
@@ -104,18 +133,30 @@ class GetFoldedProfile(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetParfile(self.fname, self.config_file, self.worker_timeout)
-        yield GetTemplate(self.fname, self.config_file, self.worker_timeout)
+        yield GetParfile(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield GetTemplate(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_folded.hdf5"))
 
     def run(self):
-        infofile = GetInfo(self.fname, self.config_file, self.worker_timeout).output().path
+        infofile = (
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
         info = load_yaml_file(infofile)
         events = get_events_from_fits(self.fname)
         mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
-        parfile = GetParfile(self.fname, self.config_file, self.worker_timeout).output().path
+        parfile = (
+            GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
         correction_fun = get_phase_from_ephemeris_file(
             mjdstart, mjdstop, parfile, ephem=info["ephem"]
         )
@@ -139,13 +180,17 @@ class GetParfile(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetInfo(self.fname, self.config_file, self.worker_timeout)
+        return GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, ".par"))
 
     def run(self):
-        infofile = GetInfo(self.fname, self.config_file, self.worker_timeout).output().path
+        infofile = (
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
         info = load_yaml_file(infofile)
         crab_names = ["crab", "b0531+21", "j0534+22"]
         found_crab = False
@@ -168,13 +213,17 @@ class GetTemplate(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetInfo(self.fname, self.config_file, self.worker_timeout)
+        return GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, ".template"))
 
     def run(self):
-        infofile = GetInfo(self.fname, self.config_file, self.worker_timeout).output().path
+        infofile = (
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
         info = load_yaml_file(infofile)
         template_file = get_template(info["source"], info)
         shutil.copyfile(template_file, self.output().path)
