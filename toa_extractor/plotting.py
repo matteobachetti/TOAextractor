@@ -29,7 +29,7 @@ def main(args=None):
         source=df,
         size=10,
         color=factor_cmap("mission", "Category10_10", missions),
-        legend_group="mission",
+        legend_field="mission",
         muted_alpha=0.1,
     )
     p.title.text = "Residuals"
