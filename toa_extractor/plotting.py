@@ -23,15 +23,19 @@ def main(args=None):
 
     missions = list(set(df["mission"]))
     p = figure()
-    p.circle(
-        x="mjd",
-        y="residual",
-        source=df,
-        size=10,
-        color=factor_cmap("mission", "Category10_10", missions),
-        legend_field="mission",
-        muted_alpha=0.1,
-    )
+    for m in missions:
+        print(m)
+        df_filt = df[df["mission"] == m]
+        print(df_filt)
+        p.circle(
+            x="mjd",
+            y="residual",
+            source=df_filt,
+            size=10,
+            color=factor_cmap("mission", "Category10_10", missions),
+            legend_label=m,
+            muted_alpha=0.1,
+        )
     p.title.text = "Residuals"
     p.xaxis.axis_label = "MJD"
     p.yaxis.axis_label = "Residual (s)"
