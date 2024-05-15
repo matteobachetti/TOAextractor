@@ -30,11 +30,12 @@ def main(args=None):
         size=10,
         color=factor_cmap("mission", "Category10_10", missions),
         legend_group="mission",
+        muted_alpha=0.1,
     )
     p.title.text = "Residuals"
     p.xaxis.axis_label = "MJD"
     p.yaxis.axis_label = "Residual (s)"
-
+    p.legend.click_policy = "mute"
     hover = HoverTool()
     hover.tooltips = [
         ("Mission", "@mission"),
