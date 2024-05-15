@@ -11,6 +11,9 @@ def main(args=None):
 
     parser.add_argument("file", help="Input summary CSV file", type=str)
     parser.add_argument("--test", action="store_true", default=False)
+    parser.add_argument(
+        "-o", "--output", help="Output file name", type=str, default="summary.html"
+    )
 
     args = parser.parse_args(args)
 
