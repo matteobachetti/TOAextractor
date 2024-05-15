@@ -26,7 +26,7 @@ def main(args=None):
         source=df,
         size=10,
         color=factor_cmap("mission", "Category10_10", missions),
-        legend="mission",
+        legend_label="mission",
     )
     p.title.text = "Residuals"
     p.xaxis.axis_label = "MJD"
