@@ -46,7 +46,7 @@ def main(args=None):
 
     p.add_tools(hover)
 
-    output_file("summary.html")
+    output_file(args.output)
     save(p)
     if not args.test:
         show(p)
