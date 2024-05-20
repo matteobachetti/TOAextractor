@@ -50,7 +50,8 @@ def main(args=None):
             line_width=2,
             line_color=factor_cmap("mission", "Category10_10", missions),
         )
-
+        errorbar.upper_head.size = 0
+        errorbar.lower_head.size = 0
         p.add_layout(errorbar)
     p.title.text = "Residuals"
     p.xaxis.axis_label = "MJD"
