@@ -6,6 +6,7 @@ import warnings
 from astropy.table import Table
 from stingray.pulse.pulsar import get_model
 from stingray.pulse.pulsar import fftfit
+from hendrics.ml_timing import ml_pulsefit
 
 # from stingray.events import EventList
 import matplotlib.pyplot as plt
@@ -117,7 +118,11 @@ class GetResidual(luigi.Task):
 
         prof = prof_table["profile"]
         template = template_table["profile"]
-        mean_amp, std_amp, phase_res, phase_res_err = fftfit(prof, template=template)
+        # mean_amp, std_amp, phase_res, phase_res_err = fftfit(prof, template=template)
+
+        pars, errs = ml_pulsefit(prof, template, calculate_errors=True, fit_base=True)
+        phase_res, phase_res_err = pars[1], errs[1]
+
         output = {}
         output.update(prof_table.meta)
         output["residual"] = float(phase_res / prof_table.meta["F0"])
