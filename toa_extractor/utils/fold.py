@@ -58,7 +58,11 @@ def calculate_profile(phase, nbin=512, expo=None):
         prof_corr = prof / expo
 
     t = Table(
-        {"phase": np.linspace(0, 1, nbin + 1)[:-1], "profile": prof_corr, "profile_raw": prof}
+        {
+            "phase": np.linspace(0, 1, nbin + 1)[:-1],
+            "profile": prof_corr,
+            "profile_raw": prof,
+        }
     )
     if expo is not None:
         t["expo"] = expo
@@ -74,7 +78,14 @@ def prepare_TOAs(mjds, ephem):
     return toalist
 
 
-def get_phase_from_ephemeris_file(mjdstart, mjdstop, parfile, ntimes=1000, ephem="DE405"):
+def get_phase_from_ephemeris_file(
+    mjdstart,
+    mjdstop,
+    parfile,
+    ntimes=1000,
+    ephem="DE405",
+    return_sec_from_mjdstart=False,
+):
     """Get a correction for orbital motion from pulsar parameter file.
 
     Parameters
@@ -100,7 +111,9 @@ def get_phase_from_ephemeris_file(mjdstart, mjdstop, parfile, ntimes=1000, ephem
     toalist = prepare_TOAs(mjds, ephem)
     m = get_model(parfile)
     phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))
-    phases = phase_int + phase_frac
+    if not return_sec_from_mjdstart:
+        phases = phase_int + phase_frac
 
-    correction_mjd_rough = interp1d(mjds, phases, fill_value="extrapolate")
-    return correction_mjd_rough
+        return interp1d(mjds, phases, fill_value="extrapolate")
+    phases = (phase_int - phase_int[0]) + phase_frac
+    return interp1d((mjds - mjdstart) * 86400, phases, fill_value="extrapolate")

@@ -60,8 +60,16 @@ class PlotDiagnostics(luigi.Task):
         fig = plt.figure()
         pphase = prof_table["phase"]
         pphase = np.concatenate([pphase - 1, pphase])
-        prof = prof_table["profile"] - prof_table["profile"].min()
-        prof /= prof.max()
+        ref_profile = prof_table["profile"]
+        ref_std_prof = np.std(np.diff(ref_profile)) / 1.4
+        ref_min = np.median(
+            ref_profile[ref_profile < ref_profile.min() + 3 * ref_std_prof]
+        )
+        ref_max = np.median(
+            ref_profile[ref_profile > ref_profile.max() - 3 * ref_std_prof]
+        )
+        prof = ref_profile - ref_min
+        prof /= ref_max - ref_min
         prof = np.concatenate([prof, prof])
 
         tphase = template_table["phase"]
@@ -156,16 +164,27 @@ class GetFoldedProfile(luigi.Task):
         )
         info = load_yaml_file(infofile)
         events = get_events_from_fits(self.fname)
+        ephem = info["ephem"]
         mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
         parfile = (
-            GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
+            GetParfile(
+                self.fname,
+                self.config_file,
+                self.version,
+                worker_timeout=self.worker_timeout,
+            )
             .output()
             .path
         )
         correction_fun = get_phase_from_ephemeris_file(
-            mjdstart, mjdstop, parfile, ephem=info["ephem"]
+            mjdstart,
+            mjdstop,
+            parfile,
+            ephem=ephem,
+            return_sec_from_mjdstart=True,
         )
-        mjds = events.time / 86400 + events.mjdref
+
+        mjds = events.time - (mjdstart - events.mjdref) * 86400
         phase = correction_fun(mjds)
         phase -= np.floor(phase)
         table = calculate_profile(phase)
@@ -197,6 +216,7 @@ class GetParfile(luigi.Task):
             .path
         )
         info = load_yaml_file(infofile)
+        ephem = info["ephem"]
         crab_names = ["crab", "b0531+21", "j0534+22"]
         found_crab = False
         name_compare = info["source"].lower() if info["source"] is not None else ""
@@ -208,7 +228,7 @@ class GetParfile(luigi.Task):
         if not found_crab:
             warnings.warn("Parfiles only available for the Crab")
 
-        get_crab_ephemeris(info["mjd"], fname=self.output().path)
+        get_crab_ephemeris(info["mjd"], fname=self.output().path, ephem=ephem)
 
 
 class GetTemplate(luigi.Task):
