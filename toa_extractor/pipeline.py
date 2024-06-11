@@ -14,7 +14,7 @@ from .utils.crab import get_crab_ephemeris
 from .utils import root_name, output_name
 from .utils.data_manipulation import get_observing_info, get_events_from_fits
 from .utils.config import get_template, load_yaml_file
-from .utils.fold import calculate_profile, get_phase_from_ephemeris_file
+from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
 
 
 class PlotDiagnostics(luigi.Task):
@@ -166,7 +166,7 @@ class GetFoldedProfile(luigi.Task):
         events = get_events_from_fits(self.fname)
         ephem = info["ephem"]
         mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
-        parfile = (
+        parfile_list = (
             GetParfile(
                 self.fname,
                 self.config_file,
@@ -176,10 +176,14 @@ class GetFoldedProfile(luigi.Task):
             .output()
             .path
         )
-        correction_fun = get_phase_from_ephemeris_file(
+        # Read list of file ignoring blank lines
+
+        parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
+
+        correction_fun = get_phase_func_from_ephemeris_file(
             mjdstart,
             mjdstop,
-            parfile,
+            parfiles,
             ephem=ephem,
             return_sec_from_mjdstart=True,
         )
@@ -189,10 +193,11 @@ class GetFoldedProfile(luigi.Task):
         phase -= np.floor(phase)
         table = calculate_profile(phase)
         table.meta.update(info)
-        model = get_model(parfile)
-        for attr in ["F0", "F1", "F2"]:
-            table.meta[attr] = getattr(model, attr).value
-        table.meta["epoch"] = model.PEPOCH.value
+        model = get_model(parfiles[0])
+        table.meta["F0"] = model.F0.value
+        # for attr in ["F0", "F1", "F2"]:
+        #     table.meta[attr] = getattr(model, attr).value
+        # table.meta["epoch"] = model.PEPOCH.value
         # table.meta['mjd'] = (local_events[0] + local_events[-1]) / 2
         table.write(self.output().path)
 
@@ -207,7 +212,7 @@ class GetParfile(luigi.Task):
         return GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(output_name(self.fname, self.version, ".par"))
+        return luigi.LocalTarget(output_name(self.fname, self.version, ".txt"))
 
     def run(self):
         infofile = (
@@ -227,8 +232,26 @@ class GetParfile(luigi.Task):
 
         if not found_crab:
             warnings.warn("Parfiles only available for the Crab")
+        # Detect whether start and end of observation have different files
+        fname = self.output().path
+        model1 = get_crab_ephemeris(info["mjdstart"], ephem=ephem)
+        model2 = get_crab_ephemeris(info["mjdstop"], ephem=ephem)
 
-        get_crab_ephemeris(info["mjd"], fname=self.output().path, ephem=ephem)
+        if model1.PEPOCH.value != model2.PEPOCH.value:
+            warnings.warn(f"Different models for start and stop of {self.fname}")
+            fname1 = fname.replace(".txt", "_start.par")
+            model1.write_parfile(fname1)
+            fname2 = fname.replace(".txt", "_stop.par")
+            model2.write_parfile(fname2)
+            parfiles = [fname1, fname2]
+        else:
+            fname1 = fname.replace(".txt", ".par")
+            model1.write_parfile(fname1)
+            parfiles = [fname1]
+
+        with open(fname, "w") as fobj:
+            for pf in parfiles:
+                print(pf, file=fobj)
 
 
 class GetTemplate(luigi.Task):

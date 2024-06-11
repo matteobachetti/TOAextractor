@@ -81,7 +81,74 @@ def prepare_TOAs(mjds, ephem):
 def get_phase_from_ephemeris_file(
     mjdstart,
     mjdstop,
-    parfile,
+    parfiles,
+    ntimes=1000,
+    ephem="DE405",
+    return_sec_from_mjdstart=False,
+):
+    """Get a correction for orbital motion from pulsar parameter file.
+
+    Parameters
+    ----------
+    mjdstart, mjdstop : float
+        Start and end of the time interval where we want the orbital solution
+    parfile : str
+        Any parameter file understood by PINT (Tempo or Tempo2 format)
+
+    Other parameters
+    ----------------
+    ntimes : int
+        Number of time intervals to use for interpolation. Default 1000
+
+    Returns
+    -------
+    times : array
+        Times at which the phases are calculated
+    phases : array
+        Phases of the pulsar at the given times
+    """
+
+    if isinstance(parfiles, str):
+        parfile = parfiles
+        m = get_model(parfile)
+
+        mjds = np.linspace(
+            max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value), ntimes
+        )
+        toalist = prepare_TOAs(mjds, ephem)
+
+        phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))
+        if not return_sec_from_mjdstart:
+            phases = phase_int + phase_frac
+            times = mjds
+            return times, phases
+
+        phases = (phase_int - phase_int[0]) + phase_frac
+        return (mjds - mjdstart) * 86400, phases
+    else:
+        times = []
+        phases = []
+        for parfile in parfiles:
+            t, ph = get_phase_from_ephemeris_file(
+                mjdstart,
+                mjdstop,
+                parfile,
+                ntimes=ntimes,
+                ephem=ephem,
+                return_sec_from_mjdstart=return_sec_from_mjdstart,
+            )
+            times.append(t)
+            phases.append(ph)
+
+        times, phases = np.concatenate(times), np.concatenate(phases)
+        order = times.argsort()
+        return times[order], phases[order]
+
+
+def get_phase_func_from_ephemeris_file(
+    mjdstart,
+    mjdstop,
+    parfiles,
     ntimes=1000,
     ephem="DE405",
     return_sec_from_mjdstart=False,
@@ -106,14 +173,21 @@ def get_phase_from_ephemeris_file(
         Function that accepts times in MJDs and returns the deorbited times.
     """
 
-    mjds = np.linspace(mjdstart, mjdstop, ntimes)
+    times, phases = get_phase_from_ephemeris_file(
+        mjdstart,
+        mjdstop,
+        parfiles,
+        ntimes=ntimes,
+        ephem=ephem,
+        return_sec_from_mjdstart=return_sec_from_mjdstart,
+    )
+    # import matplotlib.pyplot as plt
 
-    toalist = prepare_TOAs(mjds, ephem)
-    m = get_model(parfile)
-    phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))
-    if not return_sec_from_mjdstart:
-        phases = phase_int + phase_frac
+    # print(times.shape, phases.shape)
+    # plt.figure()
+    # polyfit = np.poly1d(np.polyfit(times.astype(float), phases.astype(float), 2))
 
-        return interp1d(mjds, phases, fill_value="extrapolate")
-    phases = (phase_int - phase_int[0]) + phase_frac
-    return interp1d((mjds - mjdstart) * 86400, phases, fill_value="extrapolate")
+    # plt.scatter(times, phases - polyfit(times.astype(float)))
+    # plt.plot(times, phases - polyfit(times.astype(float)))
+    # plt.show()
+    return interp1d(times, phases, fill_value="extrapolate")

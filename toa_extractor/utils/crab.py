@@ -109,10 +109,12 @@ def get_best_txt_ephemeris(mjd):
 def get_model_str(
     ephem, F0, F1, F2, TZRMJD, START, FINISH, include_proper_motion=False
 ):
-    if ephem.upper() == "DE200":
-        coords = crab_coords
-    else:
-        coords = crab_coords_icrs
+    coords = crab_coords
+
+    # if ephem.upper() == "DE200":
+    #     coords = crab_coords
+    # else:
+    #     coords = crab_coords_icrs
 
     if isinstance(TZRMJD, str):
         pepoch = TZRMJD.split(".")[0]
@@ -211,7 +213,7 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200"):
         model_200 = get_model(f)
 
     if fname is None:
-        fname = f"Crab_{model_200.PEPOCH}.par"
+        fname = f"Crab_{model_200.PEPOCH.value}.par"
 
     if ephem.upper() == "DE200":
         model_200.write_parfile(fname)
