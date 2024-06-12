@@ -19,7 +19,7 @@ from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
 class PlotDiagnostics(luigi.Task):
     fname = luigi.Parameter()
     config_file = luigi.Parameter()
-    version = luigi.Parameter()
+    version = luigi.Parameter(default="none")
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
@@ -110,7 +110,7 @@ class PlotDiagnostics(luigi.Task):
 class GetResidual(luigi.Task):
     fname = luigi.Parameter()
     config_file = luigi.Parameter()
-    version = luigi.Parameter()
+    version = luigi.Parameter(default="none")
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
@@ -158,7 +158,7 @@ class GetResidual(luigi.Task):
 class GetFoldedProfile(luigi.Task):
     fname = luigi.Parameter()
     config_file = luigi.Parameter()
-    version = luigi.Parameter()
+    version = luigi.Parameter(default="none")
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
@@ -229,7 +229,7 @@ class GetFoldedProfile(luigi.Task):
 class GetParfile(luigi.Task):
     fname = luigi.Parameter()
     config_file = luigi.Parameter()
-    version = luigi.Parameter()
+    version = luigi.Parameter(default="none")
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
@@ -281,7 +281,7 @@ class GetParfile(luigi.Task):
 class GetTemplate(luigi.Task):
     fname = luigi.Parameter()
     config_file = luigi.Parameter()
-    version = luigi.Parameter()
+    version = luigi.Parameter(default="none")
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
@@ -304,7 +304,7 @@ class GetTemplate(luigi.Task):
 class GetInfo(luigi.Task):
     fname = luigi.Parameter()
     config_file = luigi.Parameter()
-    version = luigi.Parameter()
+    version = luigi.Parameter(default="none")
     worker_timeout = luigi.IntParameter(default=600)
 
     def output(self):
