@@ -8,6 +8,9 @@ def main(args=None):
     parser = argparse.ArgumentParser(description="Create summary table for toaextract")
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
+    parser.add_argument(
+        "-o", "--output", help="Output file name", type=str, default="summary.csv"
+    )
 
     args = parser.parse_args(args)
 
@@ -22,4 +25,4 @@ def main(args=None):
         else:
             result_table = pd.concat((result_table, newtab))
 
-    result_table.to_csv("summary.csv")
+    result_table.to_csv(args.output)

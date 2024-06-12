@@ -70,7 +70,7 @@ def load_events_and_gtis(
     gti_file=None,
     hduname=None,
     column=None,
-    max_events=1e32
+    max_events=1e32,
 ):
     """Load event lists and GTIs from one or more files.
 
@@ -166,7 +166,7 @@ def load_events_and_gtis(
         hduname = get_key_from_mission_info(db, "events", "EVENTS", instr, mode)
 
     if hduname not in hdulist:
-        warnings.warn(f'HDU {hduname} not found. Trying first extension')
+        warnings.warn(f"HDU {hduname} not found. Trying first extension")
         hduname = 1
 
     datatable = hdulist[hduname].data
@@ -175,7 +175,7 @@ def load_events_and_gtis(
     ephem = timeref = timesys = None
 
     if "PLEPHEM" in header:
-        ephem = header["PLEPHEM"].strip().lstrip('JPL-').lower()
+        ephem = header["PLEPHEM"].strip().lstrip("JPL-").lower()
     if "TIMEREF" in header:
         timeref = header["TIMEREF"].strip().lower()
     if "TIMESYS" in header:
@@ -197,7 +197,7 @@ def load_events_and_gtis(
         detector_id = datatable.field(ckey)
     det_number = None if detector_id is None else list(set(detector_id))
 
-    timezero = np.longdouble(0.)
+    timezero = np.longdouble(0.0)
     if "TIMEZERO" in header:
         timezero = np.longdouble(header["TIMEZERO"])
 
@@ -292,28 +292,32 @@ def load_events_and_gtis(
     return returns
 
 
-def get_events_from_fits(evfile, max_events=5000000):
+def get_events_from_fits(evfile, max_events=5000000, additional_columns=["PRIOR"]):
     log.info(f"Opening file {evfile}")
 
-    evtdata = load_events_and_gtis(evfile, max_events=max_events)
+    evtdata = load_events_and_gtis(
+        evfile, max_events=max_events, additional_columns=additional_columns
+    )
 
-    evt = EventList(time=evtdata.ev_list,
-                    gti=evtdata.gti_list,
-                    pi=evtdata.pi_list,
-                    energy=evtdata.energy_list,
-                    mjdref=evtdata.mjdref,
-                    instr=evtdata.instr,
-                    mission=evtdata.mission,
-                    header=evtdata.header,
-                    detector_id=evtdata.detector_id,
-                    ephem=evtdata.ephem,
-                    timeref=evtdata.timeref,
-                    timesys=evtdata.timesys)
+    evt = EventList(
+        time=evtdata.ev_list,
+        gti=evtdata.gti_list,
+        pi=evtdata.pi_list,
+        energy=evtdata.energy_list,
+        mjdref=evtdata.mjdref,
+        instr=evtdata.instr,
+        mission=evtdata.mission,
+        header=evtdata.header,
+        detector_id=evtdata.detector_id,
+        ephem=evtdata.ephem,
+        timeref=evtdata.timeref,
+        timesys=evtdata.timesys,
+    )
 
-    # if 'additional_columns' in kwargs:
-    #     for key in evtdata.additional_data:
-    #         if not hasattr(evt, key.lower()):
-    #             setattr(evt, key.lower(), evtdata.additional_data[key])
+    if additional_columns is not None and len(additional_columns) > 0:
+        for key in evtdata.additional_data:
+            if not hasattr(evt, key.lower()):
+                setattr(evt, key.lower(), evtdata.additional_data[key])
     return evt
 
 
@@ -367,7 +371,9 @@ def get_observing_info(evfile, hduname=1):
         info["mjdref_highprec"] = high_precision_keyword_read(header, "MJDREF")
         info["mjdref"] = float(info["mjdref_highprec"])
         info["mode"] = mode
-        info["ephem"] = safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip("JPL-").lower()
+        info["ephem"] = (
+            safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip("JPL-").lower()
+        )
         info["timesys"] = safe_get_key(header, "TIMESYS", "TDB").strip().lower()
         info["timeref"] = safe_get_key(header, "TIMEREF", "SOLARSYSTEM").strip().lower()
         info["tstart"] = safe_get_key(header, "TSTART", None)

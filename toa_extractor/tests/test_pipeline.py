@@ -30,6 +30,6 @@ class TestPipeline(object):
 
     @classmethod
     def teardown_class(cls):
-        for ext in [".info", ".template", ".par", "_residual.*", "_folde*", "_diagnostic*"]:
-            for product in glob.glob(os.path.join(cls.datadir, f"*{ext}")):
-                os.unlink(product)
+
+        for product in glob.glob(os.path.join(cls.datadir, "*_none*")):
+            os.unlink(product)
