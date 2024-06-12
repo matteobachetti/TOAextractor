@@ -1,4 +1,4 @@
 crab:
   default: crab_512.ecsv
-  nustar:
-    default: crab_nustar_cr250.ecsv
+  # nustar:
+  #   default: crab_nustar_cr250.ecsv

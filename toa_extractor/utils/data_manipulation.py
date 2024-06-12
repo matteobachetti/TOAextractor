@@ -294,10 +294,12 @@ def load_events_and_gtis(
     return returns
 
 
-def get_events_from_fits(evfile, max_events=5000000):
+def get_events_from_fits(evfile, max_events=5000000, additional_columns=["PRIOR"]):
     log.info(f"Opening file {evfile}")
 
-    evtdata = load_events_and_gtis(evfile, max_events=max_events)
+    evtdata = load_events_and_gtis(
+        evfile, max_events=max_events, additional_columns=additional_columns
+    )
 
     evt = EventList(
         time=evtdata.ev_list,
@@ -314,10 +316,10 @@ def get_events_from_fits(evfile, max_events=5000000):
         timesys=evtdata.timesys,
     )
 
-    # if 'additional_columns' in kwargs:
-    #     for key in evtdata.additional_data:
-    #         if not hasattr(evt, key.lower()):
-    #             setattr(evt, key.lower(), evtdata.additional_data[key])
+    if additional_columns is not None and len(additional_columns) > 0:
+        for key in evtdata.additional_data:
+            if not hasattr(evt, key.lower()):
+                setattr(evt, key.lower(), evtdata.additional_data[key])
     return evt
 
 

@@ -7,6 +7,7 @@ from astropy.table import Table
 from stingray.pulse.pulsar import get_model
 from stingray.pulse.pulsar import fftfit
 from hendrics.ml_timing import ml_pulsefit
+from pulse_deadtime_fix.core import _create_weights
 
 # from stingray.events import EventList
 import matplotlib.pyplot as plt
@@ -60,17 +61,26 @@ class PlotDiagnostics(luigi.Task):
         fig = plt.figure()
         pphase = prof_table["phase"]
         pphase = np.concatenate([pphase - 1, pphase])
-        ref_profile = prof_table["profile"]
-        ref_std_prof = np.std(np.diff(ref_profile)) / 1.4
-        ref_min = np.median(
-            ref_profile[ref_profile < ref_profile.min() + 3 * ref_std_prof]
-        )
-        ref_max = np.median(
-            ref_profile[ref_profile > ref_profile.max() - 3 * ref_std_prof]
-        )
-        prof = ref_profile - ref_min
-        prof /= ref_max - ref_min
+
+        def normalize_profile(ref_profile):
+            ref_std_prof = np.std(np.diff(ref_profile)) / 1.4
+            ref_min = np.median(
+                ref_profile[ref_profile < ref_profile.min() + 3 * ref_std_prof]
+            )
+            ref_max = np.median(
+                ref_profile[ref_profile > ref_profile.max() - 3 * ref_std_prof]
+            )
+            prof = ref_profile - ref_min
+            prof /= ref_max - ref_min
+
+            return prof
+
+        prof = normalize_profile(prof_table["profile"])
         prof = np.concatenate([prof, prof])
+        prof_raw = None
+        if "profile_raw" in prof_table.colnames:
+            prof_raw = normalize_profile(prof_table["profile_raw"])
+            prof_raw = np.concatenate([prof_raw, prof_raw])
 
         tphase = template_table["phase"]
         tphase = np.concatenate([tphase - 1, tphase])
@@ -80,6 +90,14 @@ class PlotDiagnostics(luigi.Task):
 
         plt.plot(pphase / prof_table.meta["F0"], prof, color="red")
         plt.plot(tphase / prof_table.meta["F0"], temp, color="k", zorder=1)
+        if prof_raw is not None:
+            plt.plot(
+                pphase / prof_table.meta["F0"],
+                prof_raw,
+                color="red",
+                alpha=0.5,
+                zorder=0,
+            )
 
         minres = residual_dict["residual"] - residual_dict["residual_err"]
         maxres = residual_dict["residual"] + residual_dict["residual_err"]
@@ -188,17 +206,24 @@ class GetFoldedProfile(luigi.Task):
             return_sec_from_mjdstart=True,
         )
 
-        mjds = events.time - (mjdstart - events.mjdref) * 86400
-        phase = correction_fun(mjds)
+        times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
+        phase = correction_fun(times_from_mjdstart)
+
+        nbin = 512
+        expo = None
+        if hasattr(events, "prior"):
+            phases_livetime_start = correction_fun(times_from_mjdstart - events.prior)
+            phase_edges = np.linspace(0, 1, nbin + 1)
+            print(type(phases_livetime_start), type(phase), type(phase_edges))
+            weights = _create_weights(phases_livetime_start, phase, phase_edges)
+            expo = 1 / weights
         phase -= np.floor(phase)
-        table = calculate_profile(phase)
+
+        table = calculate_profile(phase, nbin=nbin, expo=expo)
         table.meta.update(info)
         model = get_model(parfiles[0])
         table.meta["F0"] = model.F0.value
-        # for attr in ["F0", "F1", "F2"]:
-        #     table.meta[attr] = getattr(model, attr).value
-        # table.meta["epoch"] = model.PEPOCH.value
-        # table.meta['mjd'] = (local_events[0] + local_events[-1]) / 2
+
         table.write(self.output().path)
 
 
