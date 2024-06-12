@@ -7,8 +7,6 @@ from stingray.io import high_precision_keyword_read
 from astropy import log
 from astropy.io import fits
 from . import safe_get_key
-import stingray.mission_support
-from stingray.mission_support import mission_specific_event_interpretation
 
 
 def read_rmf(rmf_file):

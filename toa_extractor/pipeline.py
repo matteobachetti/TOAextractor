@@ -5,14 +5,12 @@ import yaml
 import warnings
 from astropy.table import Table
 from stingray.pulse.pulsar import get_model
-from stingray.pulse.pulsar import fftfit
 from hendrics.ml_timing import ml_pulsefit
 from pulse_deadtime_fix.core import _create_weights
 
-# from stingray.events import EventList
 import matplotlib.pyplot as plt
 from .utils.crab import get_crab_ephemeris
-from .utils import root_name, output_name
+from .utils import output_name
 from .utils.data_manipulation import get_observing_info, get_events_from_fits
 from .utils.config import get_template, load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file

@@ -9,7 +9,6 @@ import astropy.units as u
 import pint
 import pint.simulation
 from pint.models import get_model
-from pint.toa import TOAs, TOA
 
 
 from astropy.coordinates import SkyCoord
@@ -156,7 +155,8 @@ def refit_solution(
     t0_mjd = np.longdouble(model_200.START.value) - 1
     t1_mjd = np.longdouble(model_200.FINISH.value) + 1
 
-    # Create a starting model with exactly the same parameters as the original one, but the new ephemeris
+    # Create a starting model with exactly the same parameters as the original one,
+    # but the new ephemeris
     with StringIO(
         get_model_str(
             new_ephem,
@@ -177,12 +177,10 @@ def refit_solution(
     )
 
     # Initial residuals
-    # start_residuals = pint.residuals.Residuals(fake_geo_toas, model_new_start)
 
     # Use the fake TOAs to fit the model with the new ephemeris
     f = pint.fitter.WLSFitter(fake_geo_toas, model_new_start)
     f.fit_toas()  # fit_toas() returns the final reduced chi squared
-    # fit_residuals = f.resids.time_resids.to(u.us)
 
     rms = f.resids.rms_weighted()
     if rms > rms_tolerance:
@@ -228,30 +226,5 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200"):
         include_proper_motion=False,
     )
     fit_model.write_parfile(fname)
-    # geo_toas = TOAs(toalist=[TOA(geo_toa, freq=np.inf, obs="0")])
-    # geo_toas.compute_TDBs(ephem=ephem)
-    # geo_toas.compute_posvels()
-    # tdb_ref_toa = fit_model.get_barycentric_toas(geo_toas).value[0]
-
-    # new_cgro_table["f0(s^-1)"][i] = fit_model.F0.value
-    # new_cgro_table["f1(s^-2)"][i] = f"{fit_model.F1.value:.5e}"
-    # new_cgro_table["f2(s^-3)"][i] = f"{fit_model.F2.value:+.2e}"
-    # new_cgro_table["B"][i] = new_ephem
-    # new_cgro_table["t0tdb"][i] = tdb_ref_toa
-    # new_cgro_table["epoch"][i] = fit_model.PEPOCH.value
-    # with open(fname, "w") as fobj:
-    #     print("PSRJ            J0534+2200", file=fobj)
-    #     print("RAJ             05:34:31.973", file=fobj)
-    #     print("DECJ            +22:00:52.06", file=fobj)
-    #     print(f"PEPOCH         {fit_model.PEPOCH.value}", file=fobj)
-    #     print(f"F0             {fit_model.F0.value}", file=fobj)
-    #     print(f"F1             {fit_model.F1.value}", file=fobj)
-    #     print(f"F2             {fit_model.F2.value}", file=fobj)
-    #     print(f"TZRMJD         {fit_model.TZRMJD.value}", file=fobj)
-    #     print(f"TZRSITE        {fit_model.TZRSITE.value}", file=fobj)
-    #     print("TZRFRQ          0", file=fobj)
-    #     print("EPHEM           ", file=fobj)
-    #     print("UNITS           TDB", file=fobj)
-    #     print("CLK             TT(TAI)", file=fobj)
 
     return fit_model
