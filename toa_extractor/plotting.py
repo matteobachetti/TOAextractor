@@ -32,7 +32,7 @@ def main(args=None):
         source = ColumnDataSource(df_filt)
 
         print(df_filt)
-        p.circle(
+        p.scatter(
             x="mjd",
             y="residual",
             source=source,
