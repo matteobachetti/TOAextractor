@@ -209,7 +209,9 @@ class GetFoldedProfile(luigi.Task):
 
         nbin = 512
         expo = None
-        if hasattr(events, "prior"):
+        if hasattr(events, "prior") and (
+            np.any(events.prior != 0) or np.any(np.isnan(events.prior))
+        ):
             phases_livetime_start = correction_fun(times_from_mjdstart - events.prior)
             phase_edges = np.linspace(0, 1, nbin + 1)
             weights = _create_weights(
