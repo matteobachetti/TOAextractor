@@ -80,4 +80,7 @@ def output_name(filename, version, suffix):
     newf = root_name(filename)
     if version is not None or version != "none":
         newf += "_" + version.lstrip("_")
-    return newf + "_" + suffix.lstrip("_")
+
+    if not suffix.startswith("."):
+        suffix = "_" + suffix.lstrip("_")
+    return newf + suffix
