@@ -24,5 +24,5 @@ def main(args=None):
             result_table = newtab
         else:
             result_table = pd.concat((result_table, newtab))
-
+    result_table.sort("mission")
     result_table.to_csv(args.output)
