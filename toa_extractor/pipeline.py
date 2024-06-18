@@ -196,6 +196,13 @@ class GetResidual(luigi.Task):
         )
         template_table = Table.read(template_file, format="ascii.ecsv")
 
+        infofile = (
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
+        info = load_yaml_file(infofile)
+
         prof = prof_table["profile"]
         template = template_table["profile"]
         # mean_amp, std_amp, phase_res, phase_res_err = fftfit(prof, template=template)
@@ -204,7 +211,13 @@ class GetResidual(luigi.Task):
         phase_res, phase_res_err = pars[1], errs[1]
 
         output = {}
-        output.update(prof_table.meta)
+        output.update(info)
+        for key, val in prof_table.meta.items():
+            if key not in output:
+                try:
+                    output[key] = float(val)
+                except:
+                    output[key] = val
         output["residual"] = float(phase_res / prof_table.meta["F0"])
         output["residual_err"] = float(phase_res_err / prof_table.meta["F0"])
 
@@ -278,7 +291,6 @@ class GetFoldedProfile(luigi.Task):
         phase -= np.floor(phase)
 
         table = calculate_profile(phase, nbin=nbin, expo=expo)
-        table.meta.update(info)
         model = get_model(parfiles[0])
         table.meta["F0"] = model.F0.value
 
