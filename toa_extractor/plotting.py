@@ -24,8 +24,31 @@ def main(args=None):
     df = pd.read_csv(args.file)
     df["upper"] = np.array(df["residual"] + df["residual_err"])
     df["lower"] = np.array(df["residual"] - df["residual_err"])
+    df["MJD_int"] = df["mjd"].astype(int)
     missions = list(set(df["mission"]))
-    p = figure()
+
+    TOOLTIPS = """
+    <div>
+        <div>
+            <img
+                src="data:image/jpg;base64,@img" height="96" alt="Bla" width="128"
+                style="float: left; margin: 0px 15px 15px 0px;"
+                border="2"
+            ></img>
+        </div>
+        <div>
+            <span style="font-size: 17px; font-weight: bold;">@mission</span>
+            <span style="font-size: 15px; color: #966;">[@instrument]</span>
+        </div>
+        <div>
+            <span>ObsID @obsid</span>
+        </div>
+        <div>
+            <span style="font-size: 15px; color: #696;">@residual</span>
+        </div>
+    </div>
+    """
+    p = figure(tooltips=TOOLTIPS, width=1200, height=800)
     for m in missions:
         print(m)
         df_filt = df[df["mission"] == m]
@@ -57,16 +80,17 @@ def main(args=None):
     p.xaxis.axis_label = "MJD"
     p.yaxis.axis_label = "Residual (s)"
     p.legend.click_policy = "mute"
-    hover = HoverTool()
-    hover.tooltips = [
-        ("Mission", "@mission"),
-        ("MJD", "@mjd"),
-        ("Instrument", "@instrument"),
-        ("Residual", "@residual"),
-        ("ObsID", "@obsid"),
-    ]
+    # hover = HoverTool()
+    # hover.tooltips = [
+    #     ("Mission", "@mission"),
+    #     ("MJD", "@mjd"),
+    #     ("Instrument", "@instrument"),
+    #     ("Residual", "@residual"),
+    #     ("ObsID", "@obsid"),
+    # ]
 
-    p.add_tools(hover)
+    # hover.tooltips = TOOLTIPS
+    # p.add_tools(hover)
 
     output_file(args.output)
     save(p)

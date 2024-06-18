@@ -1,3 +1,5 @@
+import io
+import base64
 import shutil
 import numpy as np
 import luigi
@@ -7,6 +9,7 @@ from astropy.table import Table
 from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit
 from pulse_deadtime_fix.core import _create_weights
+from PIL import Image
 
 import matplotlib.pyplot as plt
 from .utils.crab import get_crab_ephemeris
@@ -14,6 +17,56 @@ from .utils import output_name
 from .utils.data_manipulation import get_observing_info, get_events_from_fits
 from .utils.config import get_template, load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
+
+
+class TOAPipeline(luigi.Task):
+    fname = luigi.Parameter()
+    config_file = luigi.Parameter()
+    version = luigi.Parameter(default="none")
+    worker_timeout = luigi.IntParameter(default=600)
+
+    def requires(self):
+        return PlotDiagnostics(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+
+    def output(self):
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_results.yaml"))
+
+    def run(self):
+        residual_file = (
+            GetResidual(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
+        residual_dict = load_yaml_file(residual_file)
+        image_file = (
+            PlotDiagnostics(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
+            .output()
+            .path
+        )
+
+        foo = Image.open(image_file)
+        # Get image file
+        image_file = open(image_file, "rb")
+
+        foo = foo.resize((128, 96), Image.LANCZOS)
+
+        # From https://stackoverflow.com/questions/42503995/how-to-get-a-pil-image-as-a-base64-encoded-string
+        in_mem_file = io.BytesIO()
+        foo.save(in_mem_file, format="JPEG")
+        in_mem_file.seek(0)
+        img_bytes = in_mem_file.read()
+
+        base64_encoded_result_bytes = base64.b64encode(img_bytes)
+        base64_encoded_result_str = base64_encoded_result_bytes.decode("ascii")
+
+        residual_dict["img"] = base64_encoded_result_str
+
+        with open(self.output().path, "w") as f:
+            yaml.dump(residual_dict, f)
 
 
 class PlotDiagnostics(luigi.Task):
@@ -99,11 +152,14 @@ class PlotDiagnostics(luigi.Task):
 
         minres = residual_dict["residual"] - residual_dict["residual_err"]
         maxres = residual_dict["residual"] + residual_dict["residual_err"]
-        plt.axvspan(minres, maxres, color="#aaaaff", alpha=0.3)
+        plt.axvspan(minres, maxres, color="#aaaaff")
         plt.xlabel("Time (s)")
         plt.ylabel("Flux (arbitrary units)")
+        plt.xlim(-1 / prof_table.meta["F0"], 1 / prof_table.meta["F0"])
 
-        plt.savefig(self.output().path)
+        plt.tight_layout()
+        plt.savefig(self.output().path, dpi=100)
+
         plt.close(fig)
 
 
@@ -151,6 +207,7 @@ class GetResidual(luigi.Task):
         output.update(prof_table.meta)
         output["residual"] = float(phase_res / prof_table.meta["F0"])
         output["residual_err"] = float(phase_res_err / prof_table.meta["F0"])
+
         with open(self.output().path, "w") as f:
             yaml.dump(output, f)
 
@@ -346,7 +403,7 @@ def main(args=None):
     config_file = args.config
 
     _ = luigi.build(
-        [PlotDiagnostics(fname, config_file, args.version) for fname in args.files],
+        [TOAPipeline(fname, config_file, args.version) for fname in args.files],
         local_scheduler=True,
         log_level="INFO",
         workers=4,
