@@ -7,7 +7,8 @@ import yaml
 import warnings
 from astropy.table import Table
 from stingray.pulse.pulsar import get_model
-from hendrics.ml_timing import ml_pulsefit
+from hendrics.ml_timing import ml_pulsefit, normalized_template
+
 from pulse_deadtime_fix.core import _create_weights
 from PIL import Image
 
@@ -194,6 +195,7 @@ class GetResidual(luigi.Task):
             .output()
             .path
         )
+
         template_table = Table.read(template_file, format="ascii.ecsv")
 
         infofile = (
@@ -205,9 +207,10 @@ class GetResidual(luigi.Task):
 
         prof = prof_table["profile"]
         template = template_table["profile"]
-        # mean_amp, std_amp, phase_res, phase_res_err = fftfit(prof, template=template)
+        template = normalized_template(template_table["profile"], tomax=False)
 
         pars, errs = ml_pulsefit(prof, template, calculate_errors=True, fit_base=True)
+
         phase_res, phase_res_err = pars[1], errs[1]
 
         output = {}
