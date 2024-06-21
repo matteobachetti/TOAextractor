@@ -50,10 +50,8 @@ def get_best_cgro_row(MJD):
     the integer part of the *geocentric* TOA time is also the *TDB*(!) PEPOCH for the ephemeris.
     """
     table = retrieve_cgro_ephemeris()
-    good = (MJD >= table["MJD1"]) & (MJD < table["MJD2"] + 1)
-    if not np.any(good):
-        return None
-    return table[good][0]
+    good = np.argmin(np.abs(table["t0geo(MJD)"] - MJD))
+    return table[good]
 
 
 def get_best_cgro_ephemeris(MJD):
@@ -64,9 +62,6 @@ def get_best_cgro_ephemeris(MJD):
     the integer part of the *geocentric* TOA time is also the *TDB*(!) PEPOCH for the ephemeris.
     """
     row = get_best_cgro_row(MJD)
-
-    if row is None:
-        return None
 
     result = type("result", (object,), {})()
     result.F0 = np.double(row["f0(s^-1)"])
@@ -211,7 +206,7 @@ def refit_solution(
 
 
 def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None):
-    log.info("Getting correct ephemeris")
+    log.info(f"Getting correct ephemeris for MJD {MJD}")
     # ephem_cgro = get_best_cgro_ephemeris(MJD)
     # ephem_txt = get_best_txt_ephemeris(MJD)
 
