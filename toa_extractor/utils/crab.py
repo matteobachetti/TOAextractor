@@ -207,10 +207,9 @@ def refit_solution(
 
 def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None):
     log.info(f"Getting correct ephemeris for MJD {MJD}")
-    # ephem_cgro = get_best_cgro_ephemeris(MJD)
-    # ephem_txt = get_best_txt_ephemeris(MJD)
 
     row = get_best_cgro_row(MJD)
+    log.info(f"{row[('t0geo(MJD)', 'f0(s^-1)', 'f1(s^-2)')]}")
     f0, f1, f2, geo_toa, t0_mjd, t1_mjd, rms_mP = (
         row["f0(s^-1)"],
         row["f1(s^-2)"],
