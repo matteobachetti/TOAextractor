@@ -443,14 +443,35 @@ def main(args=None):
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
     parser.add_argument("--config", help="Config file", type=str, default="none")
-    parser.add_argument("--version", help="Version", type=str, default="none")
+    parser.add_argument("-v", "--version", help="Version", type=str, default="none")
+    parser.add_argument(
+        "-N",
+        "--nmax",
+        help="Maximum number of data files from a given directory",
+        type=int,
+        default=None,
+    )
 
     args = parser.parse_args(args)
 
     config_file = args.config
 
+    import os
+    import random
+
+    fnames = args.files
+    if args.nmax is not None:
+        log.info(f"Analyzing only {args.nmax} files per directory, chosen randomly")
+        dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
+        fnames = []
+        for d in dirs:
+            good_files = [f for f in args.files if f.startswith(d)]
+            if len(good_files) > args.nmax:
+                good_files = random.sample(good_files, k=args.nmax)
+            fnames += good_files
+
     _ = luigi.build(
-        [TOAPipeline(fname, config_file, args.version) for fname in args.files],
+        [TOAPipeline(fname, config_file, args.version) for fname in fnames],
         local_scheduler=True,
         log_level="INFO",
         workers=4,
