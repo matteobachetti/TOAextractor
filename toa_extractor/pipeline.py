@@ -116,7 +116,7 @@ class PlotDiagnostics(luigi.Task):
 
         fig = plt.figure()
         pphase = prof_table["phase"]
-        pphase = np.concatenate([pphase - 1, pphase])
+        pphase = np.concatenate([pphase - 2, pphase - 1, pphase, pphase + 1])
 
         def normalize_profile(ref_profile):
             ref_std_prof = np.std(np.diff(ref_profile)) / 1.4
@@ -132,23 +132,37 @@ class PlotDiagnostics(luigi.Task):
             return prof
 
         prof = normalize_profile(prof_table["profile"])
-        prof = np.concatenate([prof, prof])
+        prof = np.concatenate([prof, prof, prof, prof])
         prof_raw = None
         if "profile_raw" in prof_table.colnames:
             prof_raw = normalize_profile(prof_table["profile_raw"])
-            prof_raw = np.concatenate([prof_raw, prof_raw])
+            prof_raw = np.concatenate([prof_raw, prof_raw, prof_raw, prof_raw])
 
-        tphase = template_table["phase"]
-        tphase = np.concatenate([tphase - 1, tphase])
+        tphase = pphase / prof_table.meta["F0"]
+
         temp = template_table["profile"] - template_table["profile"].min()
         temp = temp / temp.max()
-        temp = np.concatenate([temp, temp])
+        temp = np.concatenate([temp, temp, temp, temp])
 
-        plt.plot(pphase / prof_table.meta["F0"], prof, color="red")
-        plt.plot(tphase / prof_table.meta["F0"], temp, color="k", zorder=1)
+        plt.plot(tphase, prof, color="red")
+        plt.plot(
+            tphase,
+            temp,
+            color="blue",
+            zorder=10,
+            lw=1,
+            alpha=0.5,
+        )
+        plt.plot(
+            tphase + residual_dict["residual"],
+            temp,
+            color="k",
+            zorder=10,
+            lw=2,
+        )
         if prof_raw is not None:
             plt.plot(
-                pphase / prof_table.meta["F0"],
+                tphase,
                 prof_raw,
                 color="red",
                 alpha=0.5,
@@ -157,11 +171,11 @@ class PlotDiagnostics(luigi.Task):
 
         minres = residual_dict["residual"] - residual_dict["residual_err"]
         maxres = residual_dict["residual"] + residual_dict["residual_err"]
-        plt.axvspan(minres, maxres, color="#aaaaff")
+        plt.axvspan(minres, maxres, color="#9999dd")
         plt.xlabel("Time (s)")
         plt.ylabel("Flux (arbitrary units)")
         plt.xlim(-1 / prof_table.meta["F0"], 1 / prof_table.meta["F0"])
-
+        plt.grid(visible=True, which="major", axis="x")
         plt.tight_layout()
         plt.savefig(self.output().path, dpi=100)
 
