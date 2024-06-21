@@ -58,7 +58,8 @@ class TOAPipeline(luigi.Task):
 
         foo = foo.resize((128, 96), Image.LANCZOS)
 
-        # From https://stackoverflow.com/questions/42503995/how-to-get-a-pil-image-as-a-base64-encoded-string
+        # From https://stackoverflow.com/questions/42503995/
+        # how-to-get-a-pil-image-as-a-base64-encoded-string
         in_mem_file = io.BytesIO()
         foo.save(in_mem_file, format="JPEG")
         in_mem_file.seek(0)
@@ -222,7 +223,7 @@ class GetResidual(luigi.Task):
             if key not in output:
                 try:
                     output[key] = float(val)
-                except:
+                except Exception:
                     output[key] = val
         output["residual"] = float(phase_res / prof_table.meta["F0"])
         output["residual_err"] = float(phase_res_err / prof_table.meta["F0"])

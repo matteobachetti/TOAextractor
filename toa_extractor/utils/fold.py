@@ -83,7 +83,7 @@ def get_phase_from_ephemeris_file(
     mjdstop,
     parfiles,
     ntimes=1000,
-    ephem="DE405",
+    ephem="DE430",
     return_sec_from_mjdstart=False,
 ):
     """Get a correction for orbital motion from pulsar parameter file.
