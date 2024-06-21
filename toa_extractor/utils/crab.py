@@ -1,4 +1,5 @@
 import os
+from collections.abc import Iterable
 from io import StringIO
 from astropy import log
 from urllib.request import urlopen
@@ -147,7 +148,11 @@ def get_model_str(
 
 
 def refit_solution(
-    model_200, new_ephem, rms_tolerance=None, include_proper_motion=False
+    model_200,
+    new_ephem,
+    rms_tolerance=None,
+    include_proper_motion=False,
+    force_parameters=None,
 ):
     if rms_tolerance is None:
         rms_tolerance = 1 * u.us
@@ -171,6 +176,22 @@ def refit_solution(
     ) as f:
         model_new_start = get_model(f)
 
+    if force_parameters is not None:
+        log.info("Forcing parameters:")
+        for key, val in force_parameters.items():
+            log.info(f"{key} = {val}")
+            if (
+                not isinstance(val, Iterable)
+                or isinstance(val, str)
+                or isinstance(val, u.Quantity)
+            ):
+                val = [val]
+            par = getattr(model_new_start, key)
+            par.quantity = val[0]
+            if len(val) > 1:
+                if val[1] == 1:
+                    par.frozen = False
+                par.uncertainty = val[2]
     # Create a bunch of geocenter TOAs with the original DE200 model
     fake_geo_toas = pint.simulation.make_fake_toas_uniform(
         t0_mjd, t1_mjd, 101, model_200, freq=np.inf
@@ -184,12 +205,12 @@ def refit_solution(
 
     rms = f.resids.rms_weighted()
     if rms > rms_tolerance:
-        print(f"ERROR: {rms} > {rms_tolerance}")
+        log.ERROR(f"{rms} > {rms_tolerance} at MJD {t0_mjd:.2}-{t1_mjd:.2}")
 
     return f.model
 
 
-def get_crab_ephemeris(MJD, fname=None, ephem="DE200"):
+def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None):
     log.info("Getting correct ephemeris")
     # ephem_cgro = get_best_cgro_ephemeris(MJD)
     # ephem_txt = get_best_txt_ephemeris(MJD)
@@ -213,7 +234,7 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200"):
     if fname is None:
         fname = f"Crab_{model_200.PEPOCH.value}.par"
 
-    if ephem.upper() == "DE200":
+    if ephem.upper() == "DE200" and force_parameters is None:
         model_200.write_parfile(fname)
         return model_200
 
@@ -224,6 +245,7 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200"):
         ephem,
         rms_tolerance=rms_t / 10,
         include_proper_motion=False,
+        force_parameters=force_parameters,
     )
     fit_model.write_parfile(fname)
 

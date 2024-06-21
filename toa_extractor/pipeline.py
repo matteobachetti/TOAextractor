@@ -5,7 +5,10 @@ import numpy as np
 import luigi
 import yaml
 import warnings
+from astropy import log
 from astropy.table import Table
+import astropy.units as u
+
 from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit, normalized_template
 
@@ -332,8 +335,22 @@ class GetParfile(luigi.Task):
             warnings.warn("Parfiles only available for the Crab")
         # Detect whether start and end of observation have different files
         fname = self.output().path
-        model1 = get_crab_ephemeris(info["mjdstart"], ephem=ephem)
-        model2 = get_crab_ephemeris(info["mjdstop"], ephem=ephem)
+        force_parameters = None
+        if "ra_bary" in info and info["ra_bary"] is not None:
+            log.info(
+                "Trying to set coordinates to the values found in the FITS file header"
+            )
+            force_parameters = {
+                "RAJ": info["ra_bary"] * u.deg,
+                "DECJ": info["dec_bary"] * u.deg,
+            }
+
+        model1 = get_crab_ephemeris(
+            info["mjdstart"], ephem=ephem, force_parameters=force_parameters
+        )
+        model2 = get_crab_ephemeris(
+            info["mjdstop"], ephem=ephem, force_parameters=force_parameters
+        )
 
         if model1.PEPOCH.value != model2.PEPOCH.value:
             warnings.warn(f"Different models for start and stop of {self.fname}")
