@@ -205,7 +205,7 @@ def refit_solution(
 
     rms = f.resids.rms_weighted()
     if rms > rms_tolerance:
-        log.ERROR(f"{rms} > {rms_tolerance} at MJD {t0_mjd:.2}-{t1_mjd:.2}")
+        log.error(f"{rms} > {rms_tolerance} at MJD {t0_mjd:.2}-{t1_mjd:.2}")
 
     return f.model
 
