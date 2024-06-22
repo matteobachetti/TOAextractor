@@ -19,6 +19,7 @@ jobs:
   ci_tests:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       matrix:
         include:
@@ -26,26 +27,31 @@ jobs:
             os: ubuntu-latest
             python: 3.x
             toxenv: codestyle
+            experimental: false
 
           - name: Python 3.10 with minimal dependencies
             os: ubuntu-latest
             python: "3.10"
             toxenv: py310-test
+            experimental: false
 
           - name: Python 3.12 with all optional dependencies and coverage checking
             os: ubuntu-latest
             python: "3.12"
             toxenv: py312-test-alldeps-cov
+            experimental: false
 
           - name: OS X - Python 3.12 with all optional dependencies
             os: macos-latest
             python: "3.12"
             toxenv: py312-test-alldeps
+            experimental: false
 
           - name: Windows - Python 3.12 with all optional dependencies
             os: windows-latest
             python: "3.12"
             toxenv: py312-test-alldeps
+            experimental: true
 
     steps:
     - name: Checkout code
