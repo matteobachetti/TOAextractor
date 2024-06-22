@@ -5,7 +5,10 @@ import numpy as np
 import luigi
 import yaml
 import warnings
+from astropy import log
 from astropy.table import Table
+import astropy.units as u
+
 from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit, normalized_template
 
@@ -55,7 +58,8 @@ class TOAPipeline(luigi.Task):
 
         foo = foo.resize((128, 96), Image.LANCZOS)
 
-        # From https://stackoverflow.com/questions/42503995/how-to-get-a-pil-image-as-a-base64-encoded-string
+        # From https://stackoverflow.com/questions/42503995/
+        # how-to-get-a-pil-image-as-a-base64-encoded-string
         in_mem_file = io.BytesIO()
         foo.save(in_mem_file, format="JPEG")
         in_mem_file.seek(0)
@@ -112,7 +116,7 @@ class PlotDiagnostics(luigi.Task):
 
         fig = plt.figure()
         pphase = prof_table["phase"]
-        pphase = np.concatenate([pphase - 1, pphase])
+        pphase = np.concatenate([pphase - 2, pphase - 1, pphase, pphase + 1])
 
         def normalize_profile(ref_profile):
             ref_std_prof = np.std(np.diff(ref_profile)) / 1.4
@@ -128,23 +132,37 @@ class PlotDiagnostics(luigi.Task):
             return prof
 
         prof = normalize_profile(prof_table["profile"])
-        prof = np.concatenate([prof, prof])
+        prof = np.concatenate([prof, prof, prof, prof])
         prof_raw = None
         if "profile_raw" in prof_table.colnames:
             prof_raw = normalize_profile(prof_table["profile_raw"])
-            prof_raw = np.concatenate([prof_raw, prof_raw])
+            prof_raw = np.concatenate([prof_raw, prof_raw, prof_raw, prof_raw])
 
-        tphase = template_table["phase"]
-        tphase = np.concatenate([tphase - 1, tphase])
+        tphase = pphase / prof_table.meta["F0"]
+
         temp = template_table["profile"] - template_table["profile"].min()
         temp = temp / temp.max()
-        temp = np.concatenate([temp, temp])
+        temp = np.concatenate([temp, temp, temp, temp])
 
-        plt.plot(pphase / prof_table.meta["F0"], prof, color="red")
-        plt.plot(tphase / prof_table.meta["F0"], temp, color="k", zorder=1)
+        plt.plot(tphase, prof, color="red")
+        plt.plot(
+            tphase,
+            temp,
+            color="blue",
+            zorder=10,
+            lw=1,
+            alpha=0.5,
+        )
+        plt.plot(
+            tphase + residual_dict["residual"],
+            temp,
+            color="k",
+            zorder=10,
+            lw=2,
+        )
         if prof_raw is not None:
             plt.plot(
-                pphase / prof_table.meta["F0"],
+                tphase,
                 prof_raw,
                 color="red",
                 alpha=0.5,
@@ -153,11 +171,11 @@ class PlotDiagnostics(luigi.Task):
 
         minres = residual_dict["residual"] - residual_dict["residual_err"]
         maxres = residual_dict["residual"] + residual_dict["residual_err"]
-        plt.axvspan(minres, maxres, color="#aaaaff")
+        plt.axvspan(minres, maxres, color="#9999dd")
         plt.xlabel("Time (s)")
         plt.ylabel("Flux (arbitrary units)")
         plt.xlim(-1 / prof_table.meta["F0"], 1 / prof_table.meta["F0"])
-
+        plt.grid(visible=True, which="major", axis="x")
         plt.tight_layout()
         plt.savefig(self.output().path, dpi=100)
 
@@ -219,7 +237,7 @@ class GetResidual(luigi.Task):
             if key not in output:
                 try:
                     output[key] = float(val)
-                except:
+                except Exception:
                     output[key] = val
         output["residual"] = float(phase_res / prof_table.meta["F0"])
         output["residual_err"] = float(phase_res_err / prof_table.meta["F0"])
@@ -332,8 +350,22 @@ class GetParfile(luigi.Task):
             warnings.warn("Parfiles only available for the Crab")
         # Detect whether start and end of observation have different files
         fname = self.output().path
-        model1 = get_crab_ephemeris(info["mjdstart"], ephem=ephem)
-        model2 = get_crab_ephemeris(info["mjdstop"], ephem=ephem)
+        force_parameters = None
+        if "ra_bary" in info and info["ra_bary"] is not None:
+            log.info(
+                "Trying to set coordinates to the values found in the FITS file header"
+            )
+            force_parameters = {
+                "RAJ": info["ra_bary"] * u.deg,
+                "DECJ": info["dec_bary"] * u.deg,
+            }
+
+        model1 = get_crab_ephemeris(
+            info["mjdstart"], ephem=ephem, force_parameters=force_parameters
+        )
+        model2 = get_crab_ephemeris(
+            info["mjdstop"], ephem=ephem, force_parameters=force_parameters
+        )
 
         if model1.PEPOCH.value != model2.PEPOCH.value:
             warnings.warn(f"Different models for start and stop of {self.fname}")
@@ -411,14 +443,35 @@ def main(args=None):
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
     parser.add_argument("--config", help="Config file", type=str, default="none")
-    parser.add_argument("--version", help="Version", type=str, default="none")
+    parser.add_argument("-v", "--version", help="Version", type=str, default="none")
+    parser.add_argument(
+        "-N",
+        "--nmax",
+        help="Maximum number of data files from a given directory",
+        type=int,
+        default=None,
+    )
 
     args = parser.parse_args(args)
 
     config_file = args.config
 
+    import os
+    import random
+
+    fnames = args.files
+    if args.nmax is not None:
+        log.info(f"Analyzing only {args.nmax} files per directory, chosen randomly")
+        dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
+        fnames = []
+        for d in dirs:
+            good_files = [f for f in args.files if f.startswith(d)]
+            if len(good_files) > args.nmax:
+                good_files = random.sample(good_files, k=args.nmax)
+            fnames += good_files
+
     _ = luigi.build(
-        [TOAPipeline(fname, config_file, args.version) for fname in args.files],
+        [TOAPipeline(fname, config_file, args.version) for fname in fnames],
         local_scheduler=True,
         log_level="INFO",
         workers=4,

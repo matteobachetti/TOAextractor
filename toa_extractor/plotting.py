@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from bokeh.plotting import figure, output_file, show, save
-from bokeh.models.tools import HoverTool
 from bokeh.models import Whisker, ColumnDataSource
 from bokeh.transform import factor_cmap
 

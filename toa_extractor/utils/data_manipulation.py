@@ -382,6 +382,10 @@ def get_observing_info(evfile, hduname=1):
         info["source"] = safe_get_key(header, "OBJECT", "")
         info["ra"] = float(safe_get_key(header, "RA_OBJ", None))
         info["dec"] = float(safe_get_key(header, "DEC_OBJ", None))
+        info["ra_bary"] = info["dec_bary"] = None
+        if "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"]:
+            info["ra_bary"] = header["RA_OBJ"]
+            info["dec_bary"] = header["DEC_OBJ"]
         info["mjdstart"] = float(info["tstart"] / 86400 + mjdref_highprec)
         info["mjdstop"] = float(info["tstop"] / 86400 + mjdref_highprec)
         MJD = float(info["mjdstart"] + info["mjdstop"]) / 2
