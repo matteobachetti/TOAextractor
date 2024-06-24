@@ -370,13 +370,13 @@ class GetParfile(luigi.Task):
         if model1.PEPOCH.value != model2.PEPOCH.value:
             warnings.warn(f"Different models for start and stop of {self.fname}")
             fname1 = fname.replace(".txt", "_start.par")
-            model1.write_parfile(fname1)
+            model1.write_parfile(fname1, include_info=False)
             fname2 = fname.replace(".txt", "_stop.par")
-            model2.write_parfile(fname2)
+            model2.write_parfile(fname2, include_info=False)
             parfiles = [fname1, fname2]
         else:
             fname1 = fname.replace(".txt", ".par")
-            model1.write_parfile(fname1)
+            model1.write_parfile(fname1, include_info=False)
             parfiles = [fname1]
 
         with open(fname, "w") as fobj:

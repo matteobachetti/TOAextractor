@@ -229,7 +229,7 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None):
         fname = f"Crab_{model_200.PEPOCH.value}.par"
 
     if ephem.upper() == "DE200" and force_parameters is None:
-        model_200.write_parfile(fname)
+        model_200.write_parfile(fname, include_info=False)
         return model_200
 
     print(f"ephem={ephem}, REFITTING")
@@ -241,6 +241,6 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None):
         include_proper_motion=False,
         force_parameters=force_parameters,
     )
-    fit_model.write_parfile(fname)
+    fit_model.write_parfile(fname, include_info=False)
 
     return fit_model
