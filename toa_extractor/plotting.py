@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
 from bokeh.plotting import figure, output_file, show, save
-from bokeh.models import Whisker, ColumnDataSource
+from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation
 from bokeh.transform import factor_cmap
+from .utils.crab import retrieve_cgro_ephemeris
 
 
 def main(args=None):
@@ -18,6 +19,7 @@ def main(args=None):
 
     args = parser.parse_args(args)
 
+    eph_table = retrieve_cgro_ephemeris()
     output_file("TOAs.html")
 
     df = pd.read_csv(args.file)
@@ -60,6 +62,19 @@ def main(args=None):
     </div>
     """
     p = figure(tooltips=TOOLTIPS, width=1200, height=800)
+
+    for row in eph_table:
+        rms = row["RMS"] / 1000 / row["f0(s^-1)"]
+
+        poly = PolyAnnotation(
+            fill_alpha=0.1,
+            fill_color="green",
+            line_width=0,
+            xs=[row["MJD1"], row["MJD1"], row["MJD2"], row["MJD2"]],
+            ys=[-rms, rms, rms, -rms],
+        )
+        p.add_layout(poly)
+
     for m in mission_ephem_combs:
         print(m)
         df_filt = df[df["mission+ephem"] == m]
