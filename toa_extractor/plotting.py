@@ -24,7 +24,19 @@ def main(args=None):
     df["upper"] = np.array(df["residual"] + df["residual_err"])
     df["lower"] = np.array(df["residual"] - df["residual_err"])
     df["MJD_int"] = df["mjd"].astype(int)
-    missions = list(set(df["mission"]))
+
+    df["mission+instr"] = [
+        f"{m}/{ins.upper()}" for m, ins in zip(df["mission"], df["instrument"])
+    ]
+    df["mission+ephem"] = [
+        f"{m}-{e.upper()}" for m, e in zip(df["mission+instr"], df["ephem"])
+    ]
+    mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
+    all_missions = sorted(list(set(df["mission+instr"])))
+
+    if len(all_missions) == len(mission_ephem_combs):
+        mission_ephem_combs = all_missions
+        df["mission+ephem"] = df["mission+instr"]
 
     TOOLTIPS = """
     <div>
@@ -48,9 +60,9 @@ def main(args=None):
     </div>
     """
     p = figure(tooltips=TOOLTIPS, width=1200, height=800)
-    for m in missions:
+    for m in mission_ephem_combs:
         print(m)
-        df_filt = df[df["mission"] == m]
+        df_filt = df[df["mission+ephem"] == m]
         source = ColumnDataSource(df_filt)
 
         print(df_filt)
@@ -59,7 +71,7 @@ def main(args=None):
             y="residual",
             source=source,
             size=10,
-            color=factor_cmap("mission", "Category10_10", missions),
+            color=factor_cmap("mission+ephem", "Category20_20", mission_ephem_combs),
             legend_label=m,
             muted_alpha=0.1,
         )
@@ -70,7 +82,9 @@ def main(args=None):
             source=source,
             level="annotation",
             line_width=2,
-            line_color=factor_cmap("mission", "Category10_10", missions),
+            line_color=factor_cmap(
+                "mission+ephem", "Category20_20", mission_ephem_combs
+            ),
         )
         errorbar.upper_head.size = 0
         errorbar.lower_head.size = 0
