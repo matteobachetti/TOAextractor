@@ -1,9 +1,14 @@
+import os
 import pandas as pd
 import numpy as np
+from astropy.table import Table
 from bokeh.plotting import figure, output_file, show, save
-from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation
+from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation, BoxAnnotation
 from bokeh.transform import factor_cmap
 from .utils.crab import retrieve_cgro_ephemeris
+
+curdir = os.path.dirname(__file__)
+datadir = os.path.join(curdir, "data")
 
 
 def main(args=None):
@@ -20,6 +25,7 @@ def main(args=None):
     args = parser.parse_args(args)
 
     eph_table = retrieve_cgro_ephemeris()
+    glitch_data = Table.read(os.path.join(datadir, "jb_crab_glitches.ecsv"))
     output_file("TOAs.html")
 
     df = pd.read_csv(args.file)
@@ -72,6 +78,21 @@ def main(args=None):
             line_width=0,
             xs=[row["MJD1"], row["MJD1"], row["MJD2"], row["MJD2"]],
             ys=[-rms, rms, rms, -rms],
+        )
+        p.add_layout(poly)
+
+    for row in glitch_data:
+        mjd = float(row["MJD"])
+        mjde = float(row["MJDe"])
+
+        poly = BoxAnnotation(
+            fill_color="red",
+            left=mjd - 0.5 * mjde,
+            right=mjd + 0.5 * mjde,
+            fill_alpha=0.2,
+            line_width=2,
+            line_alpha=0.2,
+            line_color="red",
         )
         p.add_layout(poly)
 
