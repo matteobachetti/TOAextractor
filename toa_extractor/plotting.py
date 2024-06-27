@@ -4,7 +4,8 @@ import numpy as np
 from astropy.table import Table
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation, BoxAnnotation
-from bokeh.transform import factor_cmap
+from bokeh.transform import factor_cmap, factor_mark
+from bokeh.palettes import Category20b_20
 from .utils.crab import retrieve_cgro_ephemeris
 
 curdir = os.path.dirname(__file__)
@@ -40,10 +41,11 @@ def main(args=None):
         f"{m}-{e.upper()}" for m, e in zip(df["mission+instr"], df["ephem"])
     ]
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
-    all_missions = sorted(list(set(df["mission+instr"])))
+    mission_instr_combs = sorted(list(set(df["mission+instr"])))
+    all_missions = sorted(list(set(df["mission"])))
 
-    if len(all_missions) == len(mission_ephem_combs):
-        mission_ephem_combs = all_missions
+    if len(mission_instr_combs) == len(mission_ephem_combs):
+        mission_ephem_combs = mission_instr_combs
         df["mission+ephem"] = df["mission+instr"]
 
     TOOLTIPS = """
@@ -96,6 +98,44 @@ def main(args=None):
         )
         p.add_layout(poly)
 
+    color = factor_cmap(
+        "mission+ephem",
+        palette=Category20b_20,
+        factors=mission_ephem_combs,
+        end=len(mission_ephem_combs),
+    )
+    MARKERS = [
+        "asterisk",
+        "circle",
+        "diamond",
+        "hex",
+        "inverted_triangle",
+        "square",
+        "star",
+        "triangle",
+        "triangle_dot",
+        "star_dot",
+        "square_cross",
+        "hex_dot",
+        "plus",
+        "square_dot",
+        "square_pin",
+        "square_x",
+        "triangle_pin",
+        "x",
+        "y",
+        "circle_cross",
+        "circle_dot",
+        "circle_x",
+        "circle_y",
+        "cross",
+        "dash",
+        "diamond_cross",
+        "diamond_dot",
+        "dot",
+    ]
+
+    markers = factor_mark("mission", MARKERS, factors=all_missions)
     for m in mission_ephem_combs:
         print(m)
         df_filt = df[df["mission+ephem"] == m]
@@ -107,39 +147,40 @@ def main(args=None):
             y="residual",
             source=source,
             size=10,
-            color=factor_cmap("mission+ephem", "Category20_20", mission_ephem_combs),
+            color=color,
             legend_label=m,
             muted_alpha=0.1,
+            marker=markers,
         )
-        errorbar = Whisker(
+        errorbar1 = Whisker(
             base="mjd",
             upper="upper",
             lower="lower",
             source=source,
             level="annotation",
             line_width=2,
-            line_color=factor_cmap(
-                "mission+ephem", "Category20_20", mission_ephem_combs
-            ),
+            line_color=color,
         )
-        errorbar.upper_head.size = 0
-        errorbar.lower_head.size = 0
-        p.add_layout(errorbar)
+        errorbar1.upper_head.size = 0
+        errorbar1.lower_head.size = 0
+        p.add_layout(errorbar1)
+        errorbar2 = Whisker(
+            base="residual",
+            upper="mjdstop",
+            lower="mjdstart",
+            source=source,
+            dimension="width",
+            level="annotation",
+            line_width=2,
+            line_color=color,
+        )
+        errorbar2.upper_head.line_color = color
+        errorbar2.lower_head.line_color = color
+        p.add_layout(errorbar2)
     p.title.text = "Residuals"
     p.xaxis.axis_label = "MJD"
     p.yaxis.axis_label = "Residual (s)"
     p.legend.click_policy = "mute"
-    # hover = HoverTool()
-    # hover.tooltips = [
-    #     ("Mission", "@mission"),
-    #     ("MJD", "@mjd"),
-    #     ("Instrument", "@instrument"),
-    #     ("Residual", "@residual"),
-    #     ("ObsID", "@obsid"),
-    # ]
-
-    # hover.tooltips = TOOLTIPS
-    # p.add_tools(hover)
 
     output_file(args.output)
     save(p)
