@@ -144,38 +144,69 @@ class PlotDiagnostics(luigi.Task):
         temp = temp / temp.max()
         temp = np.concatenate([temp, temp, temp, temp])
 
-        plt.plot(tphase, prof, color="red")
-        plt.plot(
-            tphase,
-            temp,
-            color="blue",
-            zorder=10,
-            lw=1,
-            alpha=0.5,
+        minres = residual_dict["residual"] - residual_dict["residual_err"]
+        maxres = residual_dict["residual"] + residual_dict["residual_err"]
+
+        main_ax = plt.gca()
+        # inset Axes....
+        x1, x2, y1, y2 = (
+            residual_dict["residual"] - 2e-3,
+            residual_dict["residual"] + 2e-3,
+            -0.1,
+            1.1,
+        )  # subregion of the original image
+        axins = main_ax.inset_axes(
+            [0.65, 0.03, 0.47, 0.94],
+            xlim=(x1, x2),
+            ylim=(y1, y2),
+            xticklabels=[],
+            yticklabels=[],
+            zorder=20,
         )
-        plt.plot(
-            tphase + residual_dict["residual"],
-            temp,
-            color="k",
-            zorder=10,
-            lw=2,
-        )
+        axins.tick_params(axis="x", direction="in", pad=-15)
+        import matplotlib.ticker as ticker
+
+        ticks = ticker.FuncFormatter(lambda x, pos: "{0:g}".format(x * 1000))
+        axins.xaxis.set_major_formatter(ticks)
+        axins.set_xlabel("Residual (ms)", labelpad=-30)
+        main_ax.indicate_inset_zoom(axins, edgecolor="black")
         if prof_raw is not None:
-            plt.plot(
+            main_ax.plot(
                 tphase,
                 prof_raw,
                 color="red",
                 alpha=0.5,
                 zorder=0,
+                ds="steps-mid",
             )
 
-        minres = residual_dict["residual"] - residual_dict["residual_err"]
-        maxres = residual_dict["residual"] + residual_dict["residual_err"]
-        plt.axvspan(minres, maxres, color="#9999dd")
-        plt.xlabel("Time (s)")
-        plt.ylabel("Flux (arbitrary units)")
-        plt.xlim(-1 / prof_table.meta["F0"], 1 / prof_table.meta["F0"])
-        plt.grid(visible=True, which="major", axis="x")
+        for ax in main_ax, axins:
+            ax.plot(tphase, prof, color="red", ds="steps-mid")
+            ax.plot(
+                tphase,
+                temp,
+                color="grey",
+                zorder=0,
+                lw=1,
+                alpha=0.5,
+            )
+            ax.plot(
+                tphase + residual_dict["residual"],
+                temp,
+                color="k",
+                zorder=10,
+                lw=2,
+            )
+
+            ax.axvspan(minres, maxres, color="#9999dd")
+        # main_ax.axvline(0, color="k")
+        axins.axvline(0, color="k", alpha=0.5, ls=":")
+        main_ax.set_xlabel("Time (s)")
+        main_ax.set_ylabel("Flux (arbitrary units)")
+        main_ax.set_xlim(
+            -1 / prof_table.meta["F0"] + 1.5e-2, 1 / prof_table.meta["F0"] + 1.5e-2
+        )
+
         plt.tight_layout()
         plt.savefig(self.output().path, dpi=100)
 
