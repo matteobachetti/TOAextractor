@@ -134,6 +134,7 @@ def get_model_str(
     TZRSITE 0
     START            {START}
     FINISH           {FINISH}
+    DM               0
     """
     if include_proper_motion:
         model_str += """PMRA            -14.7                         8.000e-01
