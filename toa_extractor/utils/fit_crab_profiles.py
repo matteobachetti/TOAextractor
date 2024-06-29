@@ -72,7 +72,15 @@ def asymmetric_lorentzian(x, amplitude=1, x0=0, fwhm1=1, fwhm2=1):
     return vals * amplitude
 
 
-def get_initial_parameters(phases, profile):
+def get_initial_parameters(input_phases, profile):
+    phases = copy.deepcopy(input_phases)
+    phases = normalize_phase_0d5(phases)
+    order = np.argsort(phases)
+    phases = phases[order]
+    profile = copy.deepcopy(profile)[order]
+    phases = np.concatenate([phases, phases + 1])
+    profile = np.concatenate([profile, profile])
+
     # peak 1
     prof_filt1 = copy.deepcopy(profile)
     prof_filt1[np.abs(phases) > 0.1] = 0
@@ -222,8 +230,8 @@ def default_crab_model(init_pars=None):
     bounds_a = dict([(val, (0, np.inf)) for val in ["amplitude", "fwhm1", "fwhm2"]])
     bounds = dict([(val, (0, np.inf)) for val in ["amplitude", "fwhm"]])
 
-    model_init = Const1D() * (
-        Const1D()
+    model_init = Const1D(bounds={"amplitude": (0, np.inf)}) * (
+        Const1D(bounds={"amplitude": (0, np.inf)})
         + lorentzian(bounds=bounds)
         + asymmetric_lorentzian(bounds=bounds_a)
         + lorentzian(bounds=bounds)
@@ -269,7 +277,7 @@ def fit_crab_profile(phases, profile, fitter=None):
 def fill_template_table(model_fit, nbins=512, template_table=None):
     if template_table is None:
         template_table = Table()
-    phase_max = fmin(lambda x: -model_fit(x), model_fit.x0_2)
+    phase_max = fmin(lambda x: -model_fit(x), model_fit.x0_2)[0]
     phases = np.arange(nbins) / nbins
 
     renorm_model = copy.deepcopy(model_fit)
@@ -280,8 +288,6 @@ def fill_template_table(model_fit, nbins=512, template_table=None):
     template_table["profile"] = factor * renorm_model(phases + phase_max)
     template_table["profile_raw"] = model_fit(phases)
 
-    template_table.meta["phase_max"] = phase_max
-
     par, par_err = model_fit.parameters, [
         model_fit.cov_matrix.cov_matrix[i, i] ** 0.5
         for i in range(len(model_fit.parameters))
@@ -290,6 +296,9 @@ def fill_template_table(model_fit, nbins=512, template_table=None):
     for name, p, pe in zip(model_fit.param_names, par, par_err):
         template_table.meta["best_fit"][name] = p
         template_table.meta["best_fit"][name + "_err"] = pe
+
+    template_table.meta["phase_max"] = phase_max
+    template_table.meta["phase_max_err"] = template_table.meta["best_fit"]["x0_2_err"]
 
     return template_table
 
