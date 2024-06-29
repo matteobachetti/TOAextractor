@@ -81,7 +81,7 @@ def prepare_TOAs(mjds, ephem):
 def get_phase_from_ephemeris_file(
     mjdstart,
     mjdstop,
-    parfiles,
+    parfile,
     ntimes=1000,
     ephem="DE430",
     return_sec_from_mjdstart=False,
@@ -108,49 +108,30 @@ def get_phase_from_ephemeris_file(
         Phases of the pulsar at the given times
     """
 
-    if isinstance(parfiles, str):
-        parfile = parfiles
-        m = get_model(parfile)
+    parfile = parfile
+    m = get_model(parfile)
 
-        mjds = np.linspace(
-            max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value), ntimes
-        )
-        toalist = prepare_TOAs(mjds, ephem)
+    mjds = np.linspace(
+        max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value), ntimes
+    )
+    toalist = prepare_TOAs(mjds, ephem)
 
-        phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))
-        if not return_sec_from_mjdstart:
-            phases = phase_int + phase_frac
-            times = mjds
-            return times, phases
+    phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))
+    if not return_sec_from_mjdstart:
+        phases = phase_int + phase_frac
+        times = mjds
+        return times, phases
 
-        phases = (phase_int - phase_int[0]) + phase_frac
-        return (mjds - mjdstart) * 86400, phases
-    else:
-        times = []
-        phases = []
-        for parfile in parfiles:
-            t, ph = get_phase_from_ephemeris_file(
-                mjdstart,
-                mjdstop,
-                parfile,
-                ntimes=ntimes,
-                ephem=ephem,
-                return_sec_from_mjdstart=return_sec_from_mjdstart,
-            )
-            times.append(t)
-            phases.append(ph)
-
-        times, phases = np.concatenate(times), np.concatenate(phases)
-        order = times.argsort()
-        return times[order], phases[order]
+    phases = (phase_int - phase_int[0]) + phase_frac
+    return (mjds - mjdstart) * 86400, phases
 
 
 def get_phase_func_from_ephemeris_file(
     mjdstart,
     mjdstop,
-    parfiles,
+    parfile,
     ntimes=1000,
-    ephem="DE405",
+    ephem="DE430",
     return_sec_from_mjdstart=False,
 ):
     """Get a correction for orbital motion from pulsar parameter file.
@@ -176,7 +157,7 @@ def get_phase_func_from_ephemeris_file(
     times, phases = get_phase_from_ephemeris_file(
         mjdstart,
         mjdstop,
-        parfiles,
+        parfile,
         ntimes=ntimes,
         ephem=ephem,
         return_sec_from_mjdstart=return_sec_from_mjdstart,
