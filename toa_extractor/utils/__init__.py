@@ -37,7 +37,7 @@ def safe_get_key(dictionary, keys, default):
 
 
 def root_name(filename):
-    """Return the root file name (without _ev, _lc, etc.).
+    """Return the root file name.
 
     Parameters
     ----------
