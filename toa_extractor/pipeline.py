@@ -21,6 +21,7 @@ from .utils import output_name
 from .utils.data_manipulation import get_observing_info, get_events_from_fits
 from .utils.config import get_template, load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
+from .utils.fit_crab_profiles import create_template_from_profile_table
 
 
 class TOAPipeline(luigi.Task):
@@ -30,7 +31,10 @@ class TOAPipeline(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return PlotDiagnostics(
+        yield PlotDiagnostics(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield GetProfileFit(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
 
@@ -43,20 +47,37 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
-        residual_dict = load_yaml_file(residual_file)
-        image_file = (
-            PlotDiagnostics(
+        profile_fit_file = (
+            GetProfileFit(
                 self.fname, self.config_file, self.version, self.worker_timeout
             )
             .output()
             .path
         )
+        residual_dict = load_yaml_file(residual_file)
+        profile_fit_table = Table.read(profile_fit_file)
+        residual_dict["phase_max"] = profile_fit_table.meta["phase_max"]
+        residual_dict["phase_max_err"] = profile_fit_table.meta["phase_max_err"]
+        residual_dict["fit_residual"] = (
+            profile_fit_table.meta["phase_max"] / profile_fit_table.meta["F0"]
+        )
+        residual_dict["fit_residual_err"] = (
+            profile_fit_table.meta["phase_max_err"] / profile_fit_table.meta["F0"]
+        )
+
+        # image_file = (
+        #     PlotDiagnostics(
+        #         self.fname, self.config_file, self.version, self.worker_timeout
+        #     .output()
+        #     .path
+        # )
+        image_file = output_name(self.fname, self.version, "_fit_diagnostics.jpg")
 
         foo = Image.open(image_file)
         # Get image file
         image_file = open(image_file, "rb")
 
-        foo = foo.resize((128, 96), Image.LANCZOS)
+        foo = foo.resize((576, 192), Image.LANCZOS)
 
         # From https://stackoverflow.com/questions/42503995/
         # how-to-get-a-pil-image-as-a-base64-encoded-string
@@ -275,6 +296,40 @@ class GetResidual(luigi.Task):
 
         with open(self.output().path, "w") as f:
             yaml.dump(output, f)
+
+
+class GetProfileFit(luigi.Task):
+    fname = luigi.Parameter()
+    config_file = luigi.Parameter()
+    version = luigi.Parameter(default="none")
+    worker_timeout = luigi.IntParameter(default=600)
+
+    def requires(self):
+        return GetFoldedProfile(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+
+    def output(self):
+        return luigi.LocalTarget(
+            output_name(self.fname, self.version, "_fit_template.hdf5")
+        )
+
+    def run(self):
+        prof_file = (
+            GetFoldedProfile(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
+            .output()
+            .path
+        )
+        out = self.output().path
+        create_template_from_profile_table(
+            prof_file,
+            output_template_fname=out,
+            plot=True,
+            plot_file=output_name(self.fname, self.version, "_fit_diagnostics.jpg"),
+            nbins=512,
+        )
 
 
 class GetFoldedProfile(luigi.Task):
