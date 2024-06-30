@@ -25,7 +25,7 @@ class TestPipeline(object):
                 for outf in outputs:
                     assert os.path.exists(outf)
 
-        main_summary(glob.glob(os.path.join(self.datadir, "*residual.yaml")))
+        main_summary(glob.glob(os.path.join(self.datadir, "*results.yaml")))
         main_plotting(["summary.csv", "--test"])
 
     @classmethod
