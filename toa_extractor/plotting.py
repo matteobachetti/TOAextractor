@@ -60,11 +60,11 @@ def main(args=None):
         mission_ephem_combs = mission_instr_combs
         df["mission+ephem"] = df["mission+instr"]
 
-    TOOLTIPS = """
+    TOOLTIPS = f"""
     <div>
         <div>
             <img
-                src="data:image/jpg;base64,@img" height="96" alt="Bla" width="128"
+                src="data:image/jpg;base64,@img" height="192" alt="Bla" width="248"
                 style="float: left; margin: 0px 15px 15px 0px;"
                 border="2"
             ></img>
@@ -77,7 +77,7 @@ def main(args=None):
             <span>ObsID @obsid</span>
         </div>
         <div>
-            <span style="font-size: 15px; color: #696;">@residual</span>
+            <span style="font-size: 15px; color: #696;">@{res_label}</span>
         </div>
     </div>
     """
