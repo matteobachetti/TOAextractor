@@ -415,7 +415,7 @@ class GetFoldedProfile(luigi.Task):
             model = get_model(parfiles[i])
             table = calculate_profile(phase, nbin=nbin, expo=expo)
             if "phase" not in result_table.colnames:
-                result_table[f"phase"] = table["phase"]
+                result_table["phase"] = table["phase"]
                 result_table.meta["F0"] = model.F0.value
             result_table[f"profile_{i}"] = table["profile"]
             result_table[f"profile_raw_{i}"] = table["profile_raw"]
