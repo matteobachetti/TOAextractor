@@ -21,6 +21,7 @@ from .utils import output_name
 from .utils.data_manipulation import get_observing_info, get_events_from_fits
 from .utils.config import get_template, load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
+from .utils.fit_crab_profiles import create_template_from_profile_table
 
 
 class TOAPipeline(luigi.Task):
@@ -30,7 +31,10 @@ class TOAPipeline(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return PlotDiagnostics(
+        yield PlotDiagnostics(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield GetProfileFit(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
 
@@ -43,20 +47,37 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
-        residual_dict = load_yaml_file(residual_file)
-        image_file = (
-            PlotDiagnostics(
+        profile_fit_file = (
+            GetProfileFit(
                 self.fname, self.config_file, self.version, self.worker_timeout
             )
             .output()
             .path
         )
+        residual_dict = load_yaml_file(residual_file)
+        profile_fit_table = Table.read(profile_fit_file)
+        residual_dict["phase_max"] = profile_fit_table.meta["phase_max"]
+        residual_dict["phase_max_err"] = profile_fit_table.meta["phase_max_err"]
+        residual_dict["fit_residual"] = (
+            profile_fit_table.meta["phase_max"] / profile_fit_table.meta["F0"]
+        )
+        residual_dict["fit_residual_err"] = (
+            profile_fit_table.meta["phase_max_err"] / profile_fit_table.meta["F0"]
+        )
+
+        # image_file = (
+        #     PlotDiagnostics(
+        #         self.fname, self.config_file, self.version, self.worker_timeout
+        #     .output()
+        #     .path
+        # )
+        image_file = output_name(self.fname, self.version, "_fit_diagnostics.jpg")
 
         foo = Image.open(image_file)
         # Get image file
         image_file = open(image_file, "rb")
 
-        foo = foo.resize((128, 96), Image.LANCZOS)
+        foo = foo.resize((576, 192), Image.LANCZOS)
 
         # From https://stackoverflow.com/questions/42503995/
         # how-to-get-a-pil-image-as-a-base64-encoded-string
@@ -238,7 +259,6 @@ class GetResidual(luigi.Task):
             .path
         )
         prof_table = Table.read(prof_file)
-
         template_file = (
             GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
             .output()
@@ -275,6 +295,40 @@ class GetResidual(luigi.Task):
 
         with open(self.output().path, "w") as f:
             yaml.dump(output, f)
+
+
+class GetProfileFit(luigi.Task):
+    fname = luigi.Parameter()
+    config_file = luigi.Parameter()
+    version = luigi.Parameter(default="none")
+    worker_timeout = luigi.IntParameter(default=600)
+
+    def requires(self):
+        return GetFoldedProfile(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+
+    def output(self):
+        return luigi.LocalTarget(
+            output_name(self.fname, self.version, "_fit_template.hdf5")
+        )
+
+    def run(self):
+        prof_file = (
+            GetFoldedProfile(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
+            .output()
+            .path
+        )
+        out = self.output().path
+        create_template_from_profile_table(
+            prof_file,
+            output_template_fname=out,
+            plot=True,
+            plot_file=output_name(self.fname, self.version, "_fit_diagnostics.jpg"),
+            nbins=512,
+        )
 
 
 class GetFoldedProfile(luigi.Task):
@@ -315,38 +369,69 @@ class GetFoldedProfile(luigi.Task):
             .path
         )
         # Read list of file ignoring blank lines
-
         parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
+        models = [get_model(p) for p in parfiles]
+        epochs = np.asarray([m.PEPOCH.value for m in models])
+        mjd_edges = [mjdstart, mjdstop]
+        if len(set(epochs)) > 1:
+            additional_mjd_edges = (epochs[1:] + epochs[:-1]) / 2
+            mjd_edges = np.concatenate([[mjdstart], additional_mjd_edges, [mjdstop]])
 
-        correction_fun = get_phase_func_from_ephemeris_file(
-            mjdstart,
-            mjdstop,
-            parfiles,
-            ephem=ephem,
-            return_sec_from_mjdstart=True,
+        mjds = events.time / 86400 + events.mjdref
+        nbin = 512
+        edge_idxs = np.searchsorted(mjds, mjd_edges)
+
+        result_table = Table()
+        for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
+            correction_fun = get_phase_func_from_ephemeris_file(
+                mjdstart,
+                mjdstop,
+                parfiles[i],
+                ephem=ephem,
+                return_sec_from_mjdstart=True,
+            )
+
+            good = slice(edge_idxs[i], edge_idxs[i + 1])
+            times_from_mjdstart = events.time[good] - (mjdstart - events.mjdref) * 86400
+            phase = correction_fun(times_from_mjdstart)
+
+            expo = None
+            if hasattr(events, "prior") and (
+                np.any(events.prior != 0) or np.any(np.isnan(events.prior))
+            ):
+                phases_livetime_start = correction_fun(
+                    times_from_mjdstart - events.prior[good]
+                )
+                phase_edges = np.linspace(0, 1, nbin + 1)
+                weights = _create_weights(
+                    phases_livetime_start.astype(float),
+                    phase.astype(float),
+                    phase_edges,
+                )
+                expo = 1 / weights
+
+            phase -= np.floor(phase)
+
+            model = get_model(parfiles[i])
+            table = calculate_profile(phase, nbin=nbin, expo=expo)
+            if "phase" not in result_table.colnames:
+                result_table["phase"] = table["phase"]
+                result_table.meta["F0"] = model.F0.value
+            result_table[f"profile_{i}"] = table["profile"]
+            result_table[f"profile_raw_{i}"] = table["profile_raw"]
+
+            result_table[f"profile_{i}"].meta["F0"] = model.F0.value
+            result_table[f"profile_{i}"].meta["F1"] = model.F1.value
+            result_table[f"profile_{i}"].meta["F2"] = model.F2.value
+
+        result_table["profile"] = np.sum(
+            [result_table[f"profile_{i}"] for i in range(len(parfiles))], axis=0
+        )
+        result_table["profile_raw"] = np.sum(
+            [result_table[f"profile_raw_{i}"] for i in range(len(parfiles))], axis=0
         )
 
-        times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
-        phase = correction_fun(times_from_mjdstart)
-
-        nbin = 512
-        expo = None
-        if hasattr(events, "prior") and (
-            np.any(events.prior != 0) or np.any(np.isnan(events.prior))
-        ):
-            phases_livetime_start = correction_fun(times_from_mjdstart - events.prior)
-            phase_edges = np.linspace(0, 1, nbin + 1)
-            weights = _create_weights(
-                phases_livetime_start.astype(float), phase.astype(float), phase_edges
-            )
-            expo = 1 / weights
-        phase -= np.floor(phase)
-
-        table = calculate_profile(phase, nbin=nbin, expo=expo)
-        model = get_model(parfiles[0])
-        table.meta["F0"] = model.F0.value
-
-        table.write(self.output().path)
+        result_table.write(self.output().path)
 
 
 class GetParfile(luigi.Task):

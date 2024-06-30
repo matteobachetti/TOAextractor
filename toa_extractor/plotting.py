@@ -22,6 +22,13 @@ def main(args=None):
     parser.add_argument(
         "-o", "--output", help="Output file name", type=str, default="summary.html"
     )
+    parser.add_argument(
+        "-r",
+        "--residual",
+        help="Output file name",
+        choices=["fit", "toa"],
+        default="fit",
+    )
 
     args = parser.parse_args(args)
 
@@ -30,8 +37,13 @@ def main(args=None):
     output_file("TOAs.html")
 
     df = pd.read_csv(args.file)
-    df["upper"] = np.array(df["residual"] + df["residual_err"])
-    df["lower"] = np.array(df["residual"] - df["residual_err"])
+
+    if args.residual == "toa":
+        res_label = "residual"
+    else:
+        res_label = "fit_residual"
+    df["upper"] = np.array(df[res_label] + df[res_label + "_err"])
+    df["lower"] = np.array(df[res_label] - df[res_label + "_err"])
     df["MJD_int"] = df["mjd"].astype(int)
 
     df["mission+instr"] = [
@@ -48,11 +60,11 @@ def main(args=None):
         mission_ephem_combs = mission_instr_combs
         df["mission+ephem"] = df["mission+instr"]
 
-    TOOLTIPS = """
+    TOOLTIPS = f"""
     <div>
         <div>
             <img
-                src="data:image/jpg;base64,@img" height="96" alt="Bla" width="128"
+                src="data:image/jpg;base64,@img" height="192" alt="Bla" width="248"
                 style="float: left; margin: 0px 15px 15px 0px;"
                 border="2"
             ></img>
@@ -65,7 +77,7 @@ def main(args=None):
             <span>ObsID @obsid</span>
         </div>
         <div>
-            <span style="font-size: 15px; color: #696;">@residual</span>
+            <span style="font-size: 15px; color: #696;">@{res_label}</span>
         </div>
     </div>
     """
@@ -144,7 +156,7 @@ def main(args=None):
         print(df_filt)
         p.scatter(
             x="mjd",
-            y="residual",
+            y=res_label,
             source=source,
             size=10,
             color=color,
@@ -165,7 +177,7 @@ def main(args=None):
         errorbar1.lower_head.size = 0
         p.add_layout(errorbar1)
         errorbar2 = Whisker(
-            base="residual",
+            base=res_label,
             upper="mjdstop",
             lower="mjdstart",
             source=source,

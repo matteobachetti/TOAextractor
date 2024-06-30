@@ -134,6 +134,7 @@ def get_model_str(
     TZRSITE 0
     START            {START}
     FINISH           {FINISH}
+    DM               0
     """
     if include_proper_motion:
         model_str += """PMRA            -14.7                         8.000e-01
@@ -191,6 +192,8 @@ def refit_solution(
     fake_geo_toas = pint.simulation.make_fake_toas_uniform(
         t0_mjd, t1_mjd, 101, model_200, freq=np.inf
     )
+    fake_geo_toas.ephem = new_ephem
+    # fake_geo_toas.compute_TDBs(ephem=new_ephem)
 
     # Initial residuals
 
