@@ -172,6 +172,7 @@ def main(args=None):
             level="annotation",
             line_width=2,
             line_color=color,
+            line_alpha=0.1,
         )
         errorbar1.upper_head.size = 0
         errorbar1.lower_head.size = 0
@@ -185,6 +186,7 @@ def main(args=None):
             level="annotation",
             line_width=2,
             line_color=color,
+            line_alpha=0.1,
         )
         errorbar2.upper_head.line_color = color
         errorbar2.lower_head.line_color = color

@@ -1,5 +1,6 @@
 import copy
 import numpy as np
+import warnings
 from scipy.optimize import fmin
 
 
@@ -38,7 +39,6 @@ def _rough_lor(delta_x, fwhm=1):
     return gamma**2 / (gamma**2 + delta_x**2)
 
 
-@custom_model
 def lorentzian(x, amplitude=1, x0=0, fwhm=1):
     x = np.asanyarray(x)
     delta_x = x - x0
@@ -48,6 +48,9 @@ def lorentzian(x, amplitude=1, x0=0, fwhm=1):
     vals += _rough_lor(delta_x + 1, fwhm=fwhm)
     vals += _rough_lor(delta_x - 1, fwhm=fwhm)
     return vals * amplitude
+
+
+SingleLorentzian = custom_model(lorentzian)
 
 
 def _rough_asym_lor(delta_x, fwhm1=1, fwhm2=1):
@@ -60,7 +63,6 @@ def _rough_asym_lor(delta_x, fwhm1=1, fwhm2=1):
     return vals
 
 
-@custom_model
 def asymmetric_lorentzian(x, amplitude=1, x0=0, fwhm1=1, fwhm2=1):
     x = np.asanyarray(x)
     delta_x = x - x0
@@ -72,52 +74,21 @@ def asymmetric_lorentzian(x, amplitude=1, x0=0, fwhm1=1, fwhm2=1):
     return vals * amplitude
 
 
-def get_initial_parameters(input_phases, profile):
-    phases = copy.deepcopy(input_phases)
-    phases = normalize_phase_0d5(phases)
-    order = np.argsort(phases)
-    phases = phases[order]
-    profile = copy.deepcopy(profile)[order]
-    phases = np.concatenate([phases, phases + 1])
-    profile = np.concatenate([profile, profile])
+AsymmetricLorentzian = custom_model(asymmetric_lorentzian)
 
-    # peak 1
-    prof_filt1 = copy.deepcopy(profile)
-    prof_filt1[np.abs(phases) > 0.1] = 0
-    idx_1 = np.argmax(prof_filt1)
-    ph1 = phases[idx_1]
-    baseline = np.min(profile)
-    amplitude1 = profile[idx_1] - baseline
 
-    fwhm1 = 0.04
-    fwhm2 = 0.1
+def skewed_peak(x, amplitude0=1, amplitude1=1, x0=0, dx0=0, fwhm0=1, fwhm1=1, fwhm2=1):
+    x = np.asanyarray(x)
 
-    # peak 2
-    prof_filt2 = copy.deepcopy(profile)
-    prof_filt2[np.abs(phases - 0.35) > 0.2] = 0
-    idx_2 = np.argmax(prof_filt2)
-    ph2 = phases[idx_2]
-    amplitude2 = profile[idx_2] - baseline
+    sym_lor = lorentzian(x, amplitude=amplitude0, x0=x0, fwhm=fwhm0)
+    asym_lor = asymmetric_lorentzian(
+        x, amplitude=amplitude1, x0=x0 + dx0, fwhm1=fwhm1, fwhm2=fwhm2
+    )
 
-    init_pars = {
-        "amplitude_0": amplitude1,
-        "amplitude_1": baseline / amplitude1,
-        "amplitude_2": 0.75,
-        "x0_2": ph1,
-        "fwhm_2": fwhm1,
-        "amplitude_3": 0.5,
-        "x0_3": ph1,
-        "fwhm1_3": fwhm1 * 2,
-        "fwhm2_3": fwhm1 * 2,
-        "amplitude_4": amplitude2 / amplitude1 / 10 * 6,
-        "x0_4": ph2,
-        "fwhm_4": fwhm2,
-        "amplitude_5": amplitude2 / amplitude1 / 10 * 4,
-        "x0_5": ph2,
-        "fwhm1_5": fwhm2 * 2,
-        "fwhm2_5": fwhm2 * 2,
-    }
-    return init_pars
+    return sym_lor + asym_lor
+
+
+SkewedPeak = custom_model(skewed_peak)
 
 
 def plot_fit_diagnostics(
@@ -152,7 +123,7 @@ def plot_fit_diagnostics(
             )
         axfit.plot(phases, model_fit(phases), color="k", zorder=10, label="Fit model")
 
-        for m in (model_fit[2], model_fit[3], model_fit[4], model_fit[5]):
+        for m in (model_fit[2], model_fit[3]):
             axfit.plot(
                 phases,
                 (m(phases) + model_fit[1](phases)) * model_fit[0](phases),
@@ -227,20 +198,69 @@ def default_crab_model(init_pars=None):
         + ``fwhm2_5``: The left FWHM of the secondary peak's asymmetric Lorentzian
 
     """
-    bounds_a = dict([(val, (0, np.inf)) for val in ["amplitude", "fwhm1", "fwhm2"]])
-    bounds = dict([(val, (0, np.inf)) for val in ["amplitude", "fwhm"]])
+    bounds_skewed = dict(
+        [(val, (0, np.inf)) for val in ["amplitude0", "amplitude1", "fwhm1", "fwhm2"]]
+    )
+    bounds_skewed["fwhm0"] = (0.01, np.inf)
+    bounds_skewed["dx0"] = (-0.02, 0.02)
 
     model_init = Const1D(bounds={"amplitude": (0, np.inf)}) * (
         Const1D(bounds={"amplitude": (0, np.inf)})
-        + lorentzian(bounds=bounds)
-        + asymmetric_lorentzian(bounds=bounds_a)
-        + lorentzian(bounds=bounds)
-        + asymmetric_lorentzian(bounds=bounds_a)
+        + SkewedPeak(bounds=bounds_skewed)
+        + SkewedPeak(bounds=bounds_skewed)
     )
     if init_pars is not None:
         for key, val in init_pars.items():
             setattr(model_init, key, val)
     return model_init
+
+
+def get_initial_parameters(input_phases, profile):
+    phases = copy.deepcopy(input_phases)
+    phases = normalize_phase_0d5(phases)
+    order = np.argsort(phases)
+    phases = phases[order]
+    profile = copy.deepcopy(profile)[order]
+    phases = np.concatenate([phases, phases + 1])
+    profile = np.concatenate([profile, profile])
+
+    # peak 1
+    prof_filt1 = copy.deepcopy(profile)
+    prof_filt1[np.abs(phases) > 0.1] = 0
+    idx_1 = np.argmax(prof_filt1)
+    ph1 = phases[idx_1]
+    baseline = np.min(profile)
+    amplitude1 = profile[idx_1] - baseline
+
+    fwhm1 = 0.04
+    fwhm2 = 0.1
+
+    # peak 2
+    prof_filt2 = copy.deepcopy(profile)
+    prof_filt2[np.abs(phases - 0.35) > 0.2] = 0
+    idx_2 = np.argmax(prof_filt2)
+    ph2 = phases[idx_2]
+    amplitude2 = profile[idx_2] - baseline
+
+    init_pars = {
+        "amplitude_0": amplitude1,
+        "amplitude_1": baseline / amplitude1,
+        "amplitude0_2": 0.75,
+        "amplitude1_2": 0.5,
+        "x0_2": ph1,
+        "dx0_2": 0,
+        "fwhm0_2": fwhm1,
+        "fwhm1_2": fwhm1 * 2,
+        "fwhm2_2": fwhm1 * 2,
+        "amplitude0_3": amplitude2 / amplitude1 / 10 * 6,
+        "amplitude1_3": amplitude2 / amplitude1 / 10 * 4,
+        "x0_3": ph2,
+        "dx0_3": 0,
+        "fwhm0_3": fwhm2,
+        "fwhm1_3": fwhm2 * 2,
+        "fwhm2_3": fwhm2 * 2,
+    }
+    return init_pars
 
 
 def fit_crab_profile(phases, profile, fitter=None):
@@ -271,6 +291,20 @@ def fit_crab_profile(phases, profile, fitter=None):
     model_init = default_crab_model(init_pars=init_pars)
     model_fit = fitter(model_init, phases, profile, maxiter=200)
 
+    if normalize_phase_0d5(model_fit.x0_3 - model_fit.x0_2) < 0:
+        warnings.warn("The two peaks appear swapped. Trying to fix.")
+        new_model_fit = copy.deepcopy(model_fit)
+        for param in model_fit.param_names:
+            if param.endswith("_3"):
+                setattr(
+                    new_model_fit, param, getattr(model_fit, param.replace("_3", "_2"))
+                )
+            if param.endswith("_2"):
+                setattr(
+                    new_model_fit, param, getattr(model_fit, param.replace("_2", "_3"))
+                )
+
+        model_fit = new_model_fit
     return model_init, model_fit
 
 
