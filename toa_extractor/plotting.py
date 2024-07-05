@@ -7,6 +7,8 @@ from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation, BoxAnnotatio
 from bokeh.transform import factor_cmap, factor_mark
 from bokeh.palettes import Category20b_20
 from .utils.crab import retrieve_cgro_ephemeris
+from astropy import units as u
+from uncertainties import ufloat
 
 curdir = os.path.dirname(__file__)
 datadir = os.path.join(curdir, "data")
@@ -29,6 +31,7 @@ def main(args=None):
         choices=["fit", "toa"],
         default="fit",
     )
+    parser.add_argument("--time-units", help="Time units", type=str, default="us")
 
     args = parser.parse_args(args)
 
@@ -42,6 +45,19 @@ def main(args=None):
         res_label = "residual"
     else:
         res_label = "fit_residual"
+
+    factor = ((1 * u.s) / (1 * u.Unit(args.time_units))).to("").value
+    for col in res_label, res_label + "_err":
+        diff_str = col.replace(res_label, "")
+        df[res_label + f"_{args.time_units}" + diff_str] = df[col] * factor
+    res_label = res_label + f"_{args.time_units}"
+
+    res_str = [
+        f"{ufloat(res, err):P} {args.time_units}"
+        for res, err in zip(df[res_label], df[res_label + "_err"])
+    ]
+    df["residual_str"] = res_str
+
     df["upper"] = np.array(df[res_label] + df[res_label + "_err"])
     df["lower"] = np.array(df[res_label] - df[res_label + "_err"])
     df["MJD_int"] = df["mjd"].astype(int)
@@ -77,14 +93,15 @@ def main(args=None):
             <span>ObsID @obsid</span>
         </div>
         <div>
-            <span style="font-size: 15px; color: #696;">@{res_label}</span>
+            <span style="font-size: 15px; color: #696;">@residual_str</span>
         </div>
     </div>
     """
     p = figure(tooltips=TOOLTIPS, width=1200, height=800)
 
     for row in eph_table:
-        rms = row["RMS"] / 1000 / row["f0(s^-1)"]
+        # The rms is in milliperiods, but here we use milliseconds.
+        rms = row["RMS"] / 1000 / row["f0(s^-1)"] * factor
 
         poly = PolyAnnotation(
             fill_alpha=0.1,
@@ -109,6 +126,16 @@ def main(args=None):
             line_color="red",
         )
         p.add_layout(poly)
+    poly = BoxAnnotation(
+        fill_color="grey",
+        top=(-0.000344 + 0.000040) * factor,  # Roths et al. 2004
+        bottom=(-0.000344 - 0.000040) * factor,
+        fill_alpha=0.2,
+        line_width=2,
+        line_alpha=0.2,
+        line_color="black",
+    )
+    p.add_layout(poly)
 
     color = factor_cmap(
         "mission+ephem",
@@ -193,7 +220,7 @@ def main(args=None):
         p.add_layout(errorbar2)
     p.title.text = "Residuals"
     p.xaxis.axis_label = "MJD"
-    p.yaxis.axis_label = "Residual (s)"
+    p.yaxis.axis_label = f"Residual ({args.time_units})"
     p.legend.click_policy = "mute"
 
     output_file(args.output)
