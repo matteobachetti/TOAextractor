@@ -76,7 +76,7 @@ def main(args=None):
         mission_ephem_combs = mission_instr_combs
         df["mission+ephem"] = df["mission+instr"]
 
-    TOOLTIPS = f"""
+    TOOLTIPS = """
     <div>
         <div>
             <img

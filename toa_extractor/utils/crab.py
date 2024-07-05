@@ -106,11 +106,6 @@ def get_model_str(
 ):
     coords = crab_coords
 
-    # if ephem.upper() == "DE200":
-    #     coords = crab_coords
-    # else:
-    #     coords = crab_coords_icrs
-
     if isinstance(TZRMJD, str):
         pepoch = TZRMJD.split(".")[0]
     else:
