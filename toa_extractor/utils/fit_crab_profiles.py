@@ -226,7 +226,7 @@ def get_initial_parameters(input_phases, profile):
 
     # peak 1
     prof_filt1 = copy.deepcopy(profile)
-    prof_filt1[np.abs(phases) > 0.1] = 0
+    # prof_filt1[np.abs(phases) > 0.1] = 0
     idx_1 = np.argmax(prof_filt1)
     ph1 = phases[idx_1]
     baseline = np.min(profile)
@@ -237,7 +237,7 @@ def get_initial_parameters(input_phases, profile):
 
     # peak 2
     prof_filt2 = copy.deepcopy(profile)
-    prof_filt2[np.abs(phases - 0.35) > 0.2] = 0
+    prof_filt2[np.abs(normalize_phase_0d5(phases - ph1) - 0.35) > 0.2] = 0
     idx_2 = np.argmax(prof_filt2)
     ph2 = phases[idx_2]
     amplitude2 = profile[idx_2] - baseline
@@ -260,6 +260,7 @@ def get_initial_parameters(input_phases, profile):
         "fwhm1_3": fwhm2 * 2,
         "fwhm2_3": fwhm2 * 2,
     }
+    print(init_pars)
     return init_pars
 
 
