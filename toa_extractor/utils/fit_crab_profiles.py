@@ -226,7 +226,6 @@ def get_initial_parameters(input_phases, profile):
 
     # peak 1
     prof_filt1 = copy.deepcopy(profile)
-    # prof_filt1[np.abs(phases) > 0.1] = 0
     idx_1 = np.argmax(prof_filt1)
     ph1 = phases[idx_1]
     baseline = np.min(profile)
