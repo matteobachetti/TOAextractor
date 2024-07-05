@@ -121,16 +121,38 @@ def plot_fit_diagnostics(
             axfit.plot(
                 phases, model_init(phases), color="grey", alpha=0.5, label="Init model"
             )
-        axfit.plot(phases, model_fit(phases), color="k", zorder=10, label="Fit model")
+        axfit.plot(
+            phases, model_fit(phases), color="k", zorder=20, lw=1.5, label="Fit model"
+        )
 
-        for m in (model_fit[2], model_fit[3]):
+        peak_colors = ["b", "navy"]
+        for i, m in enumerate((model_fit[2], model_fit[3])):
+            full_peak_fit = m(phases)
+            sym_lor_fit = lorentzian(
+                phases, amplitude=m.amplitude0, x0=m.x0, fwhm=m.fwhm0
+            )
+            asym_lor_fit = asymmetric_lorentzian(
+                phases,
+                amplitude=m.amplitude1,
+                x0=m.x0 + m.dx0,
+                fwhm1=m.fwhm1,
+                fwhm2=m.fwhm2,
+            )
             axfit.plot(
                 phases,
-                (m(phases) + model_fit[1](phases)) * model_fit[0](phases),
-                color="k",
+                (full_peak_fit + model_fit[1](phases)) * model_fit[0](phases),
+                color=peak_colors[i],
                 zorder=10,
-                ls=":",
             )
+            for peak in sym_lor_fit, asym_lor_fit:
+                axfit.plot(
+                    phases,
+                    (peak + model_fit[1](phases)) * model_fit[0](phases),
+                    color=peak_colors[i],
+                    zorder=10,
+                    ls=":",
+                )
+
         axfit.grid(True)
 
         axres.plot(phases, residuals, ds="steps-mid", color="r")
@@ -352,10 +374,7 @@ def create_template_from_profile_table(
     output_template_table = fill_template_table(
         model_fit, nbins=nbins, template_table=empty_template_table
     )
-    if output_template_fname is not None:
-        output_template_table.write(
-            output_template_fname, overwrite=True, serialize_meta=True
-        )
+
     if plot:
         plot_fit_diagnostics(
             phases,
@@ -364,6 +383,10 @@ def create_template_from_profile_table(
             phase_max=output_template_table.meta["phase_max"],
             model_init=model_init,
             plot_file=plot_file,
+        )
+    if output_template_fname is not None:
+        output_template_table.write(
+            output_template_fname, overwrite=True, serialize_meta=True
         )
     return output_template_table
 
