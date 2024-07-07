@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from toa_extractor.utils import root_name
 
 
-@np.vectorize()
 def normalize_phase_0d5(phase):
     """Normalize phase between -0.5 and 0.5
 
@@ -31,6 +30,9 @@ def normalize_phase_0d5(phase):
     while phase <= -0.5:
         phase += 1
     return phase
+
+
+normalize_phase_0d5 = np.vectorize(normalize_phase_0d5)
 
 
 def _rough_lor(delta_x, fwhm=1):
@@ -369,8 +371,6 @@ def plot_fit_diagnostics(
 
         peak_colors = ["b", "navy"]
         m = model_fit[2]
-
-        full_peak_fit = m(phases)
 
         sym_lor_fit0 = lorentzian(
             phases, amplitude=m.amplitude00, x0=m.x00, fwhm=m.fwhm00
