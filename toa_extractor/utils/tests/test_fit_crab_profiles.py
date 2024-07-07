@@ -2,7 +2,6 @@ import copy
 import pytest
 import numpy as np
 from toa_extractor.utils.fit_crab_profiles import (
-    full_crab_profile_model,
     default_crab_model,
     fit_crab_profile,
     fill_template_table,

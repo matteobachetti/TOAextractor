@@ -1,6 +1,5 @@
 import copy
 import numpy as np
-import warnings
 from scipy.optimize import fmin
 
 
@@ -240,7 +239,6 @@ def get_initial_parameters(input_phases, profile):
     prof_filt2 = copy.deepcopy(profile)
     prof_filt2[np.abs(phases + ph1 - 0.4) > 0.2] = 0
     idx_2 = np.argmax(prof_filt2)
-    ph2 = phases[idx_2]
     amplitude2 = profile[idx_2] - baseline
 
     # plt.figure()
