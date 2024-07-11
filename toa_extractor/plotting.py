@@ -14,46 +14,31 @@ curdir = os.path.dirname(__file__)
 datadir = os.path.join(curdir, "data")
 
 
-def main(args=None):
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
-
-    parser.add_argument("file", help="Input summary CSV file", type=str)
-    parser.add_argument("--test", action="store_true", default=False)
-    parser.add_argument(
-        "-o", "--output", help="Output file name", type=str, default="summary.html"
-    )
-    parser.add_argument(
-        "-r",
-        "--residual",
-        help="Output file name",
-        choices=["fit", "toa"],
-        default="fit",
-    )
-    parser.add_argument("--time-units", help="Time units", type=str, default="us")
-
-    args = parser.parse_args(args)
-
+def plot_residuals(
+    fname, time_units="us", res_label="fit_residual", output_file=None, test=False
+):
     eph_table = retrieve_cgro_ephemeris()
+    if output_file is None:
+        output_file = f"summary_{res_label}.html"
+
     glitch_data = Table.read(os.path.join(datadir, "jb_crab_glitches.ecsv"))
     output_file("TOAs.html")
 
-    df = pd.read_csv(args.file)
+    df = pd.read_csv(fname)
 
-    if args.residual == "toa":
-        res_label = "residual"
-    else:
-        res_label = "fit_residual"
+    # if args.residual == "toa":
+    #     res_label = "residual"
+    # else:
+    #     res_label = "fit_residual"
 
-    factor = ((1 * u.s) / (1 * u.Unit(args.time_units))).to("").value
+    factor = ((1 * u.s) / (1 * u.Unit(time_units))).to("").value
     for col in res_label, res_label + "_err":
         diff_str = col.replace(res_label, "")
-        df[res_label + f"_{args.time_units}" + diff_str] = df[col] * factor
-    res_label = res_label + f"_{args.time_units}"
+        df[res_label + f"_{time_units}" + diff_str] = df[col] * factor
+    res_label = res_label + f"_{time_units}"
 
     res_str = [
-        f"{ufloat(res, err):P} {args.time_units}"
+        f"{ufloat(res, err):P} {time_units}"
         for res, err in zip(df[res_label], df[res_label + "_err"])
     ]
     df["residual_str"] = res_str
@@ -220,10 +205,44 @@ def main(args=None):
         p.add_layout(errorbar2)
     p.title.text = "Residuals"
     p.xaxis.axis_label = "MJD"
-    p.yaxis.axis_label = f"Residual ({args.time_units})"
+    p.yaxis.axis_label = f"Residual ({time_units})"
     p.legend.click_policy = "mute"
 
-    output_file(args.output)
+    output_file(output_file)
     save(p)
-    if not args.test:
+    if not test:
         show(p)
+
+
+def main(args=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
+
+    parser.add_argument("file", help="Input summary CSV file", type=str)
+    parser.add_argument("--test", action="store_true", default=False)
+    parser.add_argument(
+        "-o", "--output", help="Output file name", type=str, default="summary.html"
+    )
+    parser.add_argument(
+        "-r",
+        "--residual",
+        help="Output file name",
+        choices=["fit", "toa"],
+        default="fit",
+    )
+    parser.add_argument("--time-units", help="Time units", type=str, default="us")
+
+    args = parser.parse_args(args)
+    if args.residual == "toa":
+        res_label = "residual"
+    else:
+        res_label = "fit_residual"
+
+    plot_residuals(
+        args.file,
+        time_units=args.time_units,
+        res_label=res_label,
+        output_file=args.output,
+        test=args.test,
+    )
