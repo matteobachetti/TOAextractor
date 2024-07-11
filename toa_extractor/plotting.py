@@ -15,11 +15,11 @@ datadir = os.path.join(curdir, "data")
 
 
 def plot_residuals(
-    fname, time_units="us", res_label="fit_residual", output_file=None, test=False
+    fname, time_units="us", res_label="fit_residual", output_fname=None, test=False
 ):
     eph_table = retrieve_cgro_ephemeris()
-    if output_file is None:
-        output_file = f"summary_{res_label}.html"
+    if output_fname is None:
+        output_fname = f"summary_{res_label}.html"
 
     glitch_data = Table.read(os.path.join(datadir, "jb_crab_glitches.ecsv"))
     output_file("TOAs.html")
@@ -208,7 +208,7 @@ def plot_residuals(
     p.yaxis.axis_label = f"Residual ({time_units})"
     p.legend.click_policy = "mute"
 
-    output_file(output_file)
+    output_file(output_fname)
     save(p)
     if not test:
         show(p)
@@ -243,6 +243,6 @@ def main(args=None):
         args.file,
         time_units=args.time_units,
         res_label=res_label,
-        output_file=args.output,
+        output_fname=args.output,
         test=args.test,
     )
