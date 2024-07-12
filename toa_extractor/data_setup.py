@@ -5,7 +5,7 @@ import yaml
 import numpy as np
 from astropy import log
 from astropy import units as u
-from astropy.table import Table, vstack
+from astropy.table import vstack
 
 from stingray.pulse.pulsar import get_model
 from hendrics.efsearch import (
@@ -20,7 +20,6 @@ from .utils.config import get_template, load_yaml_file
 from .utils import output_name
 from .utils.data_manipulation import get_observing_info
 from .utils.data_manipulation import get_events_from_fits
-from .utils.crab import get_crab_ephemeris
 
 
 class GetPulseFreq(luigi.Task):
@@ -96,7 +95,7 @@ class GetPulseFreq(luigi.Task):
             frequency_range = [central_freq - f0_err, central_freq + f0_err]
 
             log.info(
-                f"Searching for pulsations in the interval {frequency_range[0]}-{frequency_range[1]}"
+                f"Searching for pulsations in interval {frequency_range[0]}-{frequency_range[1]}"
             )
             log.info(f"The central frequency is {central_freq}")
 

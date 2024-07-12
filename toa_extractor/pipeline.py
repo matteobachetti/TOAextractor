@@ -1,13 +1,10 @@
 import io
 import base64
-import shutil
 import numpy as np
 import luigi
 import yaml
-import warnings
 from astropy import log
 from astropy.table import Table
-import astropy.units as u
 
 from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit, normalized_template
@@ -19,7 +16,7 @@ import matplotlib.pyplot as plt
 
 from .utils import output_name
 from .utils.data_manipulation import get_events_from_fits
-from .utils.config import get_template, load_yaml_file
+from .utils.config import load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
 from .utils.fit_crab_profiles import create_template_from_profile_table
 from .data_setup import GetInfo, GetParfile, GetTemplate, GetPulseFreq

@@ -15,8 +15,7 @@ curdir = os.path.dirname(__file__)
 datadir = os.path.join(curdir, "data")
 
 
-def plot_frequency_history(fname, freq_units=f"mHz", output_fname=None, test=False):
-    eph_table = retrieve_cgro_ephemeris()
+def plot_frequency_history(fname, freq_units="mHz", output_fname=None, test=False):
     if output_fname is None:
         output_fname = "summary_freq.html"
 
@@ -439,7 +438,7 @@ def main(args=None):
     )
 
     p2 = plot_frequency_history(
-        args.file, freq_units=f"mHz", output_fname=None, test=False
+        args.file, freq_units="uHz", output_fname=None, test=False
     )
     p = column(p1, p2)
     output_file(args.output)
