@@ -6,11 +6,17 @@ import luigi
 import yaml
 import warnings
 from astropy import log
-from astropy.table import Table
+from astropy.table import Table, vstack
 import astropy.units as u
 
 from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit, normalized_template
+from hendrics.efsearch import (
+    search_with_qffa,
+    EFPeriodogram,
+    pf_upper_limit,
+    _analyze_qffa_results,
+)
 
 from pulse_deadtime_fix.core import _create_weights
 from PIL import Image
@@ -37,6 +43,9 @@ class TOAPipeline(luigi.Task):
         yield GetProfileFit(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
+        yield GetPulseFreq(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_results.yaml"))
@@ -54,8 +63,16 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
+        best_freq_file = (
+            GetPulseFreq(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
+            .output()
+            .path
+        )
         residual_dict = load_yaml_file(residual_file)
         profile_fit_table = Table.read(profile_fit_file)
+        best_freq_table = Table.read(best_freq_file)
         residual_dict["phase_max"] = profile_fit_table.meta["phase_max"]
         residual_dict["phase_max_err"] = profile_fit_table.meta["phase_max_err"]
         residual_dict["fit_residual"] = (
@@ -65,12 +82,6 @@ class TOAPipeline(luigi.Task):
             profile_fit_table.meta["phase_max_err"] / profile_fit_table.meta["F0"]
         )
 
-        # image_file = (
-        #     PlotDiagnostics(
-        #         self.fname, self.config_file, self.version, self.worker_timeout
-        #     .output()
-        #     .path
-        # )
         image_file = output_name(self.fname, self.version, "_fit_diagnostics.jpg")
 
         foo = Image.open(image_file)
@@ -90,6 +101,12 @@ class TOAPipeline(luigi.Task):
         base64_encoded_result_str = base64_encoded_result_bytes.decode("ascii")
 
         residual_dict["img"] = base64_encoded_result_str
+        residual_dict["local_best_freq"] = float(best_freq_table["f"][0])
+        residual_dict["local_best_freq_err_n"] = float(best_freq_table["f_err_n"][0])
+        residual_dict["local_best_freq_err_p"] = float(best_freq_table["f_err_p"][0])
+        residual_dict["local_best_fdot"] = float(best_freq_table["fdot"][0])
+        residual_dict["local_best_fdot_err_n"] = float(best_freq_table["fdot_err_n"][0])
+        residual_dict["local_best_fdot_err_p"] = float(best_freq_table["fdot_err_p"][0])
 
         with open(self.output().path, "w") as f:
             yaml.dump(residual_dict, f)
@@ -432,6 +449,112 @@ class GetFoldedProfile(luigi.Task):
         )
 
         result_table.write(self.output().path)
+
+
+class GetPulseFreq(luigi.Task):
+    fname = luigi.Parameter()
+    config_file = luigi.Parameter()
+    version = luigi.Parameter(default="none")
+    worker_timeout = luigi.IntParameter(default=600)
+
+    def requires(self):
+        yield GetParfile(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield GetTemplate(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+
+    def output(self):
+        return luigi.LocalTarget(
+            output_name(self.fname, self.version, "_best_cands.ecsv")
+        )
+
+    def run(self):
+        N = 6
+        infofile = (
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
+        info = load_yaml_file(infofile)
+        events = get_events_from_fits(self.fname)
+        mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
+        parfile_list = (
+            GetParfile(
+                self.fname,
+                self.config_file,
+                self.version,
+                worker_timeout=self.worker_timeout,
+            )
+            .output()
+            .path
+        )
+        # Read list of file ignoring blank lines
+        parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
+        models = [get_model(p) for p in parfiles]
+        epochs = np.asarray([m.PEPOCH.value for m in models])
+        mjd_edges = [mjdstart, mjdstop]
+        if len(set(epochs)) > 1:
+            additional_mjd_edges = (epochs[1:] + epochs[:-1]) / 2
+            mjd_edges = np.concatenate([[mjdstart], additional_mjd_edges, [mjdstop]])
+
+        mjds = events.time / 86400 + events.mjdref
+        nbin = 512
+        edge_idxs = np.searchsorted(mjds, mjd_edges)
+
+        result_table = []
+        for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
+            model = get_model(parfiles[i])
+
+            good = slice(edge_idxs[i], edge_idxs[i + 1])
+            events_to_analyze = events.time[good]
+            length = events_to_analyze[-1] - events_to_analyze[0]
+
+            ref_time = (events_to_analyze[-1] + events_to_analyze[0]) / 2
+            ref_mjd = ref_time / 86400 + events.mjdref
+
+            secs_from_pepoch = (ref_mjd - model.PEPOCH.value) * 86400
+            central_freq = (
+                model.F0.value
+                + secs_from_pepoch * model.F1.value
+                + 0.5 * secs_from_pepoch**2 * model.F2.value
+            )
+            f0_err = 2 / length
+            frequency_range = [central_freq - f0_err, central_freq + f0_err]
+
+            log.info(
+                f"Searching for pulsations in the interval {frequency_range[0]}-{frequency_range[1]}"
+            )
+            log.info(f"The central frequency is {central_freq}")
+
+            frequencies, fdots, stats, step, fdotsteps, length = search_with_qffa(
+                events_to_analyze,
+                *frequency_range,
+                nbin=nbin,
+                n=N,
+                oversample=min(N * 8, 50),
+            )
+            efperiodogram = EFPeriodogram(
+                frequencies,
+                stats,
+                "Z2n",
+                nbin,
+                N,
+                fdots=fdots,
+                mjdref=events.mjdref,
+                pepoch=ref_time,
+                oversample=N * 8,
+            )
+            efperiodogram.upperlim = pf_upper_limit(
+                np.max(stats), events.time.size, n=N
+            )
+            efperiodogram.ncounts = events.time.size
+            best_cand_table = _analyze_qffa_results(efperiodogram)
+            log.info(best_cand_table[0])
+            result_table.append(best_cand_table[0])
+        result_table = vstack(result_table)
+        result_table.write(self.output().path, format="ascii.ecsv", overwrite=True)
 
 
 class GetParfile(luigi.Task):
