@@ -37,7 +37,7 @@ def plot_frequency_history(fname, freq_units="mHz", output_fname=None, test=Fals
         f"{ufloat(res, err):P} {freq_units}"
         for res, err in zip(df[res_label], df[res_label + "_err"])
     ]
-    df["residual_str"] = res_str
+    df["freq_residual_str"] = res_str
 
     df["upper"] = np.array(df[res_label] + df[res_label + "_err"])
     df["lower"] = np.array(df[res_label] - df[res_label + "_err"])
@@ -74,24 +74,11 @@ def plot_frequency_history(fname, freq_units="mHz", output_fname=None, test=Fals
             <span>ObsID @obsid</span>
         </div>
         <div>
-            <span style="font-size: 15px; color: #696;">@residual_str</span>
+            <span style="font-size: 15px; color: #696;">@freq_residual_str</span>
         </div>
     </div>
     """
     p = figure(tooltips=TOOLTIPS, width=1200, height=800)
-
-    # for row in eph_table:
-    #     # The rms is in milliperiods, but here we use milliseconds.
-    #     rms = row["RMS"] / 1000 / row["f0(s^-1)"] * factor
-
-    #     poly = PolyAnnotation(
-    #         fill_alpha=0.1,
-    #         fill_color="green",
-    #         line_width=0,
-    #         xs=[row["MJD1"], row["MJD1"], row["MJD2"], row["MJD2"]],
-    #         ys=[-rms, rms, rms, -rms],
-    #     )
-    #     p.add_layout(poly)
 
     for row in glitch_data:
         mjd = float(row["MJD"])
@@ -107,16 +94,6 @@ def plot_frequency_history(fname, freq_units="mHz", output_fname=None, test=Fals
             line_color="red",
         )
         p.add_layout(poly)
-    # poly = BoxAnnotation(
-    #     fill_color="grey",
-    #     top=(-0.000344 + 0.000040) * factor,  # Roths et al. 2004
-    #     bottom=(-0.000344 - 0.000040) * factor,
-    #     fill_alpha=0.2,
-    #     line_width=2,
-    #     line_alpha=0.2,
-    #     line_color="black",
-    # )
-    # p.add_layout(poly)
 
     color = factor_cmap(
         "mission+ephem",
@@ -218,11 +195,6 @@ def plot_residuals(
     output_file("TOAs.html")
 
     df = pd.read_csv(fname)
-
-    # if args.residual == "toa":
-    #     res_label = "residual"
-    # else:
-    #     res_label = "fit_residual"
 
     factor = ((1 * u.s) / (1 * u.Unit(time_units))).to("").value
     for col in res_label, res_label + "_err":
