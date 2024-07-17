@@ -5,7 +5,7 @@ import yaml
 import numpy as np
 from astropy import log
 from astropy import units as u
-from astropy.table import vstack
+from astropy.table import vstack, Table
 
 from stingray.pulse.pulsar import get_model
 from hendrics.efsearch import (
@@ -14,12 +14,192 @@ from hendrics.efsearch import (
     pf_upper_limit,
     _analyze_qffa_results,
 )
-
+from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris
 from .utils.config import get_template, load_yaml_file
-from .utils import output_name
+from .utils import output_name, root_name
 from .utils.data_manipulation import get_observing_info
 from .utils.data_manipulation import get_events_from_fits
+from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
+from pulse_deadtime_fix.core import _create_weights
+
+
+class PlotPhaseogram(luigi.Task):
+    fname = luigi.Parameter()
+    config_file = luigi.Parameter()
+    version = luigi.Parameter(default="none")
+    worker_timeout = luigi.IntParameter(default=600)
+
+    def requires(self):
+        return GetPhaseogram(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+
+    def output(self):
+        return luigi.LocalTarget(
+            output_name(self.fname, self.version, "_phaseograms.jpg")
+        )
+
+    def run(self):
+        import matplotlib.pyplot as plt
+        import matplotlib.gridspec as gridspec
+        from stingray.pulse.search import plot_phaseogram
+
+        phaseograms = open(self.input().path, "r").read().splitlines()
+        nphaseograms = len(phaseograms)
+
+        ncol = 2
+        nrow = nphaseograms
+
+        fig = plt.figure(figsize=(7.5 * ncol, 5 * nrow))
+        gs = gridspec.GridSpec(nrow, ncol)
+
+        for i, phaseogram in enumerate(phaseograms):
+            ax1 = fig.add_subplot(gs[i, 0])
+            ax2 = fig.add_subplot(gs[i, 1])
+            table = Table.read(phaseogram)
+            phas = (table["profile"].T).astype(float)
+
+            for iph in range(phas.shape[1]):
+                phas[:, iph] = phas[:, iph] / phas[:, iph].max()
+
+            meantime_mjd = round(
+                np.mean(table.meta["time"]) / 86400 + table.meta["mjdref"], 1
+            )
+            meantime = (meantime_mjd - table.meta["mjdref"]) * 86400
+            time_hrs = (table.meta["time"] - meantime) / 3600
+            for ax in ax1, ax2:
+                plot_phaseogram(
+                    phas,
+                    table.meta["phase"],
+                    time_hrs,
+                    ax=ax,
+                    cmap="twilight",
+                )
+                plot_phaseogram(
+                    phas,
+                    table.meta["phase"] + 1,
+                    time_hrs,
+                    ax=ax,
+                    cmap="twilight",
+                )
+                ax.set_title(f"Phaseogram {i}")
+                ax.set_ylabel(f"Time (hr) since {meantime_mjd:.1f}")
+                ax.grid(True)
+            imax = np.argmax(phas.sum(axis=1))
+            phmax = normalize_phase_0d5(table.meta["phase"][imax]) + 1
+            print(imax, phmax)
+            ax2.set_xlim(phmax - 0.1, phmax + 0.1)
+
+        plt.tight_layout()
+        plt.savefig(self.output().path)
+
+
+class GetPhaseogram(luigi.Task):
+    fname = luigi.Parameter()
+    config_file = luigi.Parameter()
+    version = luigi.Parameter(default="none")
+    worker_timeout = luigi.IntParameter(default=600)
+
+    def requires(self):
+        yield GetParfile(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield GetTemplate(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+
+    def output(self):
+        return luigi.LocalTarget(
+            output_name(self.fname, self.version, "_phaseograms.txt")
+        )
+
+    def run(self):
+        infofile = (
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
+
+        info = load_yaml_file(infofile)
+        events = get_events_from_fits(self.fname)
+        ephem = info["ephem"]
+        mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
+        parfile_list = (
+            GetParfile(
+                self.fname,
+                self.config_file,
+                self.version,
+                worker_timeout=self.worker_timeout,
+            )
+            .output()
+            .path
+        )
+        # Read list of file ignoring blank lines
+        parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
+        models = [get_model(p) for p in parfiles]
+        epochs = np.asarray([m.PEPOCH.value for m in models])
+        mjd_edges = [mjdstart, mjdstop]
+        if len(set(epochs)) > 1:
+            additional_mjd_edges = (epochs[1:] + epochs[:-1]) / 2
+            mjd_edges = np.concatenate([[mjdstart], additional_mjd_edges, [mjdstop]])
+
+        mjds = events.time / 86400 + events.mjdref
+        nbin = 512
+        edge_idxs = np.searchsorted(mjds, mjd_edges)
+        output_files = []
+        for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
+            correction_fun = get_phase_func_from_ephemeris_file(
+                mjdstart,
+                mjdstop,
+                parfiles[i],
+                ephem=ephem,
+                return_sec_from_mjdstart=True,
+            )
+
+            good = slice(edge_idxs[i], edge_idxs[i + 1])
+            times_from_mjdstart = events.time[good] - (mjdstart - events.mjdref) * 86400
+            phase = correction_fun(times_from_mjdstart)
+
+            tot_phots = times_from_mjdstart.size
+            tot_time = mjdstop - mjdstart
+            ntimebin = int(max(tot_phots // 500_000, tot_time, 10))
+
+            expo = None
+            # In principle, this should be applied to each sub-interval of the phaseogram.
+            if hasattr(events, "prior") and (
+                np.any(events.prior != 0) or np.any(np.isnan(events.prior))
+            ):
+                phases_livetime_start = correction_fun(
+                    times_from_mjdstart - events.prior[good]
+                )
+                phase_edges = np.linspace(0, 1, nbin + 1)
+                weights = _create_weights(
+                    phases_livetime_start.astype(float),
+                    phase.astype(float),
+                    phase_edges,
+                )
+                expo = 1 / weights
+
+            phase -= np.floor(phase)
+
+            model = get_model(parfiles[i])
+            result_table = calculate_dyn_profile(
+                events.time[good], phase, nbin=nbin, ntimebin=ntimebin, expo=expo
+            )
+            result_table.meta["F0"] = model.F0.value
+            result_table.meta["F1"] = model.F1.value
+            result_table.meta["F2"] = model.F2.value
+            result_table.meta["mjdref"] = events.mjdref
+            new_file_name = output_name(
+                self.fname, self.version, f"_dynprof_{i:000d}.hdf5"
+            )
+            result_table.write(new_file_name, overwrite=True)
+            output_files.append(new_file_name)
+
+        with open(self.output().path, "w") as fobj:
+            for fname in output_files:
+                print(fname, file=fobj)
 
 
 class GetPulseFreq(luigi.Task):

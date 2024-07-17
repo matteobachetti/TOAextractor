@@ -19,7 +19,7 @@ from .utils.data_manipulation import get_events_from_fits
 from .utils.config import load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
 from .utils.fit_crab_profiles import create_template_from_profile_table
-from .data_setup import GetInfo, GetParfile, GetTemplate, GetPulseFreq
+from .data_setup import GetInfo, GetParfile, GetTemplate, GetPulseFreq, PlotPhaseogram
 
 
 class TOAPipeline(luigi.Task):
@@ -36,6 +36,9 @@ class TOAPipeline(luigi.Task):
             self.fname, self.config_file, self.version, self.worker_timeout
         )
         yield GetPulseFreq(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield PlotPhaseogram(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
 
