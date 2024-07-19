@@ -7,6 +7,7 @@ from astropy import log
 from astropy import units as u
 from astropy.table import vstack, Table
 import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
 
 from stingray.pulse.pulsar import get_model
 from hendrics.efsearch import (
@@ -25,15 +26,20 @@ from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_fil
 from pulse_deadtime_fix.core import _create_weights
 
 
-def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr"):
+def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_window=None):
 
     table = Table.read(phaseogram_file)
     normalized_phaseogram = (table["profile"].T).astype(float)
 
     for iph in range(normalized_phaseogram.shape[1]):
-        normalized_phaseogram[:, iph] = (
-            normalized_phaseogram[:, iph] / normalized_phaseogram[:, iph].max()
-        )
+        profile = normalized_phaseogram[:, iph]
+        if len(profile) > 200:
+            window_length = profile.size / 50
+            polyorder = min(3, window_length - 1)
+            profile = savgol_filter(
+                profile, window_length, polyorder, mode="wrap", cval=0.0
+            )
+        normalized_phaseogram[:, iph] = profile / profile.max()
 
     meantime_mjd = round(np.mean(table.meta["time"]) / 86400 + table.meta["mjdref"], 1)
     meantime = (meantime_mjd - table.meta["mjdref"]) * 86400
@@ -54,14 +60,14 @@ def _plot_phaseogram(
         phases,
         time_hrs,
         ax=ax,
-        cmap="twilight",
+        cmap="Greys",
     )
     plot_phaseogram(
         phas,
         phases + 1,
         time_hrs,
         ax=ax,
-        cmap="twilight",
+        cmap="Greys",
     )
     ax.set_title(title)
     if label_y:
@@ -205,8 +211,7 @@ class GetPhaseogram(luigi.Task):
 
             tot_phots = times_from_mjdstart.size
             tot_time = mjdstop - mjdstart
-            ntimebin = int(max(tot_phots // 500_000, tot_time, 10))
-
+            ntimebin = int(max(tot_phots // 200_000, tot_time * 4, 10))
             expo = None
             # In principle, this should be applied to each sub-interval of the phaseogram.
             if hasattr(events, "prior") and (
