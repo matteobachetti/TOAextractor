@@ -8,7 +8,8 @@ from bokeh.models import CDSView, GroupFilter
 
 from bokeh.transform import factor_cmap, factor_mark
 from bokeh.palettes import Category20b_20
-from bokeh.layouts import column
+
+# from bokeh.layouts import column
 from .utils.crab import retrieve_cgro_ephemeris
 from .utils import root_name
 from astropy import units as u
@@ -448,15 +449,16 @@ def main(args=None):
         propagate_hover=True,
     )
     p1.add_layout(poly)
-    p2 = plot_frequency_history(
-        dataset,
-        glitch_data,
-        width=1200,
-        height=400,
-        res_label=rf"$$\Delta\nu_{{\rm spin}} {{ (\rm {freq_units_str}) }}$$",
-    )
-    p2.x_range = p1.x_range
-    p = column(p1, p2)
+    # p2 = plot_frequency_history(
+    #     dataset,
+    #     glitch_data,
+    #     width=1200,
+    #     height=400,
+    #     res_label=rf"$$\Delta\nu_{{\rm spin}} {{ (\rm {freq_units_str}) }}$$",
+    # )
+    # p2.x_range = p1.x_range
+    # p = column(p1, p2)
+    p = p1
     output_file(args.output)
     save(p)
 

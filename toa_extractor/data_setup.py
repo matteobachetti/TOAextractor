@@ -16,7 +16,8 @@ from hendrics.efsearch import (
     pf_upper_limit,
     _analyze_qffa_results,
 )
-from .utils.fit_crab_profiles import normalize_phase_0d5
+
+# from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris
 from .utils.config import get_template, load_yaml_file
 from .utils import output_name

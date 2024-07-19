@@ -24,7 +24,7 @@ from .data_setup import (
     GetInfo,
     GetParfile,
     GetTemplate,
-    GetPulseFreq,
+    # GetPulseFreq,
     GetPhaseogram,
     _plot_phaseogram,
     _get_and_normalize_phaseogram,
@@ -158,9 +158,9 @@ class TOAPipeline(luigi.Task):
         yield GetProfileFit(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
-        yield GetPulseFreq(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        # yield GetPulseFreq(
+        #     self.fname, self.config_file, self.version, self.worker_timeout
+        # )
         yield GetPhaseogram(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
@@ -188,16 +188,16 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
-        best_freq_file = (
-            GetPulseFreq(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
-            .output()
-            .path
-        )
+        # best_freq_file = (
+        #     GetPulseFreq(
+        #         self.fname, self.config_file, self.version, self.worker_timeout
+        #     )
+        #     .output()
+        #     .path
+        # )
         residual_dict = load_yaml_file(residual_file)
         profile_fit_table = Table.read(profile_fit_file)
-        best_freq_table = Table.read(best_freq_file)
+        # best_freq_table = Table.read(best_freq_file)
         residual_dict["phase_max"] = profile_fit_table.meta["phase_max"]
         residual_dict["phase_max_err"] = profile_fit_table.meta["phase_max_err"]
         residual_dict["fit_residual"] = (
@@ -210,12 +210,12 @@ class TOAPipeline(luigi.Task):
         residual_dict["img"] = encode_image_file(image_file)
         # residual_dict["phas_img"] = encode_image_file(phas_image_file)
 
-        residual_dict["local_best_freq"] = float(best_freq_table["f"][0])
-        residual_dict["local_best_freq_err_n"] = float(best_freq_table["f_err_n"][0])
-        residual_dict["local_best_freq_err_p"] = float(best_freq_table["f_err_p"][0])
-        residual_dict["initial_freq_estimate"] = float(
-            best_freq_table["initial_freq_estimate"][0]
-        )
+        # residual_dict["local_best_freq"] = float(best_freq_table["f"][0])
+        # residual_dict["local_best_freq_err_n"] = float(best_freq_table["f_err_n"][0])
+        # residual_dict["local_best_freq_err_p"] = float(best_freq_table["f_err_p"][0])
+        # residual_dict["initial_freq_estimate"] = float(
+        #     best_freq_table["initial_freq_estimate"][0]
+        # )
 
         with open(self.output().path, "w") as f:
             yaml.dump(residual_dict, f)
