@@ -369,12 +369,21 @@ class GetPulseFreq(luigi.Task):
             )
             efperiodogram.ncounts = events.time.size
             best_cand_table = _analyze_qffa_results(efperiodogram)
+            best_cand_table["f_err_n"] = [
+                -max(step / 2, err) for err in np.abs(best_cand_table["f_err_n"])
+            ]
+            best_cand_table["f_err_p"] = [
+                max(step / 2, err) for err in np.abs(best_cand_table["f_err_p"])
+            ]
+
             best_cand_table["initial_freq_estimate"] = central_freq
             log.info(best_cand_table[0])
             result_table.append(best_cand_table[0])
         result_table = vstack(result_table)
         result_table.write(
-            self.output().path, format="ascii.ecsv", overwrite=True, serialize_meta=True
+            self.output().path,
+            format="ascii.ecsv",
+            overwrite=True,
         )
 
 
