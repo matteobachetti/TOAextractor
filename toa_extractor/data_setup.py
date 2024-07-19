@@ -18,7 +18,7 @@ from hendrics.efsearch import (
 from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris
 from .utils.config import get_template, load_yaml_file
-from .utils import output_name, root_name
+from .utils import output_name
 from .utils.data_manipulation import get_observing_info
 from .utils.data_manipulation import get_events_from_fits
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file

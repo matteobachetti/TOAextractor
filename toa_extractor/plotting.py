@@ -4,7 +4,7 @@ import numpy as np
 from astropy.table import Table
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation, BoxAnnotation
-from bokeh.models import CDSView, ColumnDataSource, IndexFilter, GroupFilter
+from bokeh.models import CDSView, GroupFilter
 
 from bokeh.transform import factor_cmap, factor_mark
 from bokeh.palettes import Category20b_20
@@ -88,13 +88,10 @@ def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual")
 def plot_frequency_history(
     full_dataset,
     glitch_data,
-    output_fname=None,
-    test=False,
     res_label="Residuals",
     **figure_kwargs,
 ):
-    if output_fname is None:
-        output_fname = "summary_freq.html"
+
     df = full_dataset.to_df()
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
     all_missions = sorted(list(set(df["mission"])))
@@ -234,8 +231,6 @@ def plot_frequency_history(
 def plot_residuals(
     full_dataset,
     glitch_data,
-    output_fname=None,
-    test=False,
     res_label="Residuals",
     **figure_kwargs,
 ):
@@ -268,19 +263,6 @@ def plot_residuals(
     """
     p = figure(tooltips=TOOLTIPS, **figure_kwargs)
 
-    # for row in eph_table:
-    #     # The rms is in milliperiods, but here we use milliseconds.
-    #     rms = row["RMS"] / 1000 / row["f0(s^-1)"] * factor
-
-    #     poly = PolyAnnotation(
-    #         fill_alpha=0.1,
-    #         fill_color="green",
-    #         line_width=0,
-    #         xs=[row["MJD1"], row["MJD1"], row["MJD2"], row["MJD2"]],
-    #         ys=[-rms, rms, rms, -rms],
-    #     )
-    #     p.add_layout(poly)
-
     for row in glitch_data:
         mjd = float(row["MJD"])
         mjde = float(row["MJDe"])
@@ -295,16 +277,6 @@ def plot_residuals(
             line_color="red",
         )
         p.add_layout(poly)
-    # poly = BoxAnnotation(
-    #     fill_color="grey",
-    #     top=(-0.000344 + 0.000040) * factor,  # Roths et al. 2004
-    #     bottom=(-0.000344 - 0.000040) * factor,
-    #     fill_alpha=0.2,
-    #     line_width=2,
-    #     line_alpha=0.2,
-    #     line_color="black",
-    # )
-    # p.add_layout(poly)
 
     color = factor_cmap(
         "mission+ephem",
@@ -451,18 +423,38 @@ def main(args=None):
     p1 = plot_residuals(
         dataset,
         glitch_data,
-        output_fname=args.output,
-        test=args.test,
         width=1200,
         height=400,
         res_label=rf"$$\Delta{{\rm TOA}} ({time_units_str})$$",
     )
 
+    eph_table = retrieve_cgro_ephemeris()
+    time_factor = (1 * u.s / u.Unit(args.time_units)).to("").value
+    for row in eph_table:
+        # The rms is in milliperiods, but here we use milliseconds.
+        rms = row["RMS"] / 1000 / row["f0(s^-1)"] * time_factor
+
+        poly = PolyAnnotation(
+            fill_alpha=0.1,
+            fill_color="green",
+            line_width=0,
+            xs=[row["MJD1"], row["MJD1"], row["MJD2"], row["MJD2"]],
+            ys=[-rms, rms, rms, -rms],
+        )
+        p1.add_layout(poly)
+    poly = BoxAnnotation(
+        fill_color="grey",
+        top=(-0.000344 + 0.000040) * time_factor,  # Roths et al. 2004
+        bottom=(-0.000344 - 0.000040) * time_factor,
+        fill_alpha=0.2,
+        line_width=2,
+        line_alpha=0.2,
+        line_color="black",
+    )
+    p1.add_layout(poly)
     p2 = plot_frequency_history(
         dataset,
         glitch_data,
-        output_fname=None,
-        test=False,
         width=1200,
         height=400,
         res_label=rf"$$\Delta\nu_{{\rm spin}} {{ (\rm {freq_units_str}) }}$$",
