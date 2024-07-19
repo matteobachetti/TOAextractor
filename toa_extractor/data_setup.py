@@ -147,7 +147,6 @@ class PlotPhaseogram(luigi.Task):
 
             imax = np.argmax(phas.sum(axis=1))
             phmax = normalize_phase_0d5(phases[imax]) + 1
-            print(imax, phmax)
             ax2.set_xlim(phmax - 0.1, phmax + 0.1)
 
         plt.tight_layout()
