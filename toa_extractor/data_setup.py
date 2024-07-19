@@ -90,69 +90,6 @@ def _plot_phaseogram(
     ax.grid(True)
 
 
-class PlotPhaseogram(luigi.Task):
-    fname = luigi.Parameter()
-    config_file = luigi.Parameter()
-    version = luigi.Parameter(default="none")
-    worker_timeout = luigi.IntParameter(default=600)
-
-    def requires(self):
-        return GetPhaseogram(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-
-    def output(self):
-        return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_phaseograms.jpg")
-        )
-
-    def run(self):
-        import matplotlib.gridspec as gridspec
-
-        phaseograms = open(self.input().path, "r").read().splitlines()
-        nphaseograms = len(phaseograms)
-
-        ncol = 2
-        nrow = nphaseograms
-
-        fig = plt.figure(figsize=(7.5 * ncol, 5 * nrow))
-        gs = gridspec.GridSpec(nrow, ncol)
-
-        for i, phaseogram in enumerate(phaseograms):
-            ax1 = fig.add_subplot(gs[i, 0])
-            ax2 = fig.add_subplot(gs[i, 1])
-            phases, time_hrs, phas, meantime_mjd = _get_and_normalize_phaseogram(
-                phaseogram
-            )
-
-            _plot_phaseogram(
-                phases,
-                time_hrs,
-                phas,
-                meantime_mjd,
-                ax1,
-                title=f"Phaseogram {i}",
-                label_y=True,
-            )
-            _plot_phaseogram(
-                phases,
-                time_hrs,
-                phas,
-                meantime_mjd,
-                ax2,
-                title=f"Phaseogram {i}",
-                label_y=False,
-            )
-            imax = np.argmax(phas.sum(axis=1))
-
-            imax = np.argmax(phas.sum(axis=1))
-            phmax = normalize_phase_0d5(phases[imax]) + 1
-            ax2.set_xlim(phmax - 0.1, phmax + 0.1)
-
-        plt.tight_layout()
-        plt.savefig(self.output().path)
-
-
 class GetPhaseogram(luigi.Task):
     fname = luigi.Parameter()
     config_file = luigi.Parameter()

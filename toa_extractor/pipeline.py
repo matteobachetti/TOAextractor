@@ -25,7 +25,6 @@ from .data_setup import (
     GetParfile,
     GetTemplate,
     GetPulseFreq,
-    PlotPhaseogram,
     GetPhaseogram,
     _plot_phaseogram,
     _get_and_normalize_phaseogram,
@@ -162,7 +161,7 @@ class TOAPipeline(luigi.Task):
         yield GetPulseFreq(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
-        yield PlotPhaseogram(
+        yield GetPhaseogram(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
 
@@ -172,6 +171,13 @@ class TOAPipeline(luigi.Task):
     def run(self):
         residual_file = (
             GetResidual(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
+        image_file = (
+            PlotDiagnostics(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
             .output()
             .path
         )
@@ -201,16 +207,8 @@ class TOAPipeline(luigi.Task):
             profile_fit_table.meta["phase_max_err"] / profile_fit_table.meta["F0"]
         )
 
-        image_file = output_name(self.fname, self.version, "_fit_diagnostics.jpg")
-        phas_image_file = (
-            PlotPhaseogram(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
-            .output()
-            .path
-        )
         residual_dict["img"] = encode_image_file(image_file)
-        residual_dict["phas_img"] = encode_image_file(phas_image_file)
+        # residual_dict["phas_img"] = encode_image_file(phas_image_file)
 
         residual_dict["local_best_freq"] = float(best_freq_table["f"][0])
         residual_dict["local_best_freq_err_n"] = float(best_freq_table["f_err_n"][0])
@@ -370,8 +368,6 @@ class GetProfileFit(luigi.Task):
         create_template_from_profile_table(
             prof_file,
             output_template_fname=out,
-            plot=True,
-            plot_file=output_name(self.fname, self.version, "_fit_diagnostics.jpg"),
             nbins=512,
         )
 
