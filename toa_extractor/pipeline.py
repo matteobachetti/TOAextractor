@@ -1,5 +1,3 @@
-import io
-import base64
 import numpy as np
 import luigi
 import yaml
@@ -10,11 +8,10 @@ from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit, normalized_template
 
 from pulse_deadtime_fix.core import _create_weights
-from PIL import Image
 
 import matplotlib.pyplot as plt
 
-from .utils import output_name
+from .utils import output_name, encode_image_file
 from .utils.data_manipulation import get_events_from_fits
 from .utils.config import load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
@@ -78,24 +75,16 @@ class TOAPipeline(luigi.Task):
         )
 
         image_file = output_name(self.fname, self.version, "_fit_diagnostics.jpg")
+        phas_image_file = (
+            PlotPhaseogram(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
+            .output()
+            .path
+        )
+        residual_dict["img"] = encode_image_file(image_file)
+        residual_dict["phas_img"] = encode_image_file(phas_image_file)
 
-        foo = Image.open(image_file)
-        # Get image file
-        image_file = open(image_file, "rb")
-
-        foo = foo.resize((576, 192), Image.LANCZOS)
-
-        # From https://stackoverflow.com/questions/42503995/
-        # how-to-get-a-pil-image-as-a-base64-encoded-string
-        in_mem_file = io.BytesIO()
-        foo.save(in_mem_file, format="JPEG")
-        in_mem_file.seek(0)
-        img_bytes = in_mem_file.read()
-
-        base64_encoded_result_bytes = base64.b64encode(img_bytes)
-        base64_encoded_result_str = base64_encoded_result_bytes.decode("ascii")
-
-        residual_dict["img"] = base64_encoded_result_str
         residual_dict["local_best_freq"] = float(best_freq_table["f"][0])
         residual_dict["local_best_freq_err_n"] = float(best_freq_table["f_err_n"][0])
         residual_dict["local_best_freq_err_p"] = float(best_freq_table["f_err_p"][0])

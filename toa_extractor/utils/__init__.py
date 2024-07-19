@@ -2,7 +2,10 @@
 
 # This sub-module is destined for common non-package specific utility
 # functions.
+import io
+import base64
 import os
+from PIL import Image
 
 
 def safe_get_key(dictionary, keys, default):
@@ -84,3 +87,24 @@ def output_name(filename, version, suffix):
     if not suffix.startswith("."):
         suffix = "_" + suffix.lstrip("_")
     return newf + suffix
+
+
+def encode_image_file(image_file):
+    foo = Image.open(image_file)
+    # Get image file
+    image_file = open(image_file, "rb")
+
+    foo.thumbnail((576, 192), Image.LANCZOS)
+
+    # From https://stackoverflow.com/questions/42503995/
+    # how-to-get-a-pil-image-as-a-base64-encoded-string
+    in_mem_file = io.BytesIO()
+    foo.save(in_mem_file, format="JPEG")
+
+    in_mem_file.seek(0)
+    img_bytes = in_mem_file.read()
+
+    base64_encoded_result_bytes = base64.b64encode(img_bytes)
+    base64_encoded_result_str = base64_encoded_result_bytes.decode("ascii")
+
+    return base64_encoded_result_str
