@@ -440,6 +440,8 @@ def main(args=None):
             line_width=0,
             xs=[row["MJD1"], row["MJD1"], row["MJD2"], row["MJD2"]],
             ys=[-rms, rms, rms, -rms],
+            level="image",
+            propagate_hover=True,
         )
         p1.add_layout(poly)
     poly = BoxAnnotation(
@@ -450,6 +452,8 @@ def main(args=None):
         line_width=2,
         line_alpha=0.2,
         line_color="black",
+        level="image",
+        propagate_hover=True,
     )
     p1.add_layout(poly)
     p2 = plot_frequency_history(
