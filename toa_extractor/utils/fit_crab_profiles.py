@@ -323,7 +323,6 @@ def get_initial_parameters(input_phases, profile):
         "fwhm11_2": fwhm2 * 2,
         "fwhm21_2": fwhm2 * 2,
     }
-    print(init_pars)
     return init_pars
 
 

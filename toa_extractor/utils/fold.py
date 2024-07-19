@@ -182,13 +182,5 @@ def get_phase_func_from_ephemeris_file(
         ephem=ephem,
         return_sec_from_mjdstart=return_sec_from_mjdstart,
     )
-    # import matplotlib.pyplot as plt
 
-    # print(times.shape, phases.shape)
-    # plt.figure()
-    # polyfit = np.poly1d(np.polyfit(times.astype(float), phases.astype(float), 2))
-
-    # plt.scatter(times, phases - polyfit(times.astype(float)))
-    # plt.plot(times, phases - polyfit(times.astype(float)))
-    # plt.show()
     return interp1d(times, phases, fill_value="extrapolate")

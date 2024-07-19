@@ -173,15 +173,11 @@ def plot_frequency_history(
 
     markers = factor_mark("mission", MARKERS, factors=all_missions)
     for m in mission_ephem_combs:
-        print(m)
         df_filt = df[df["mission+ephem"] == m]
         filt_source = ColumnDataSource(df_filt)
         group = GroupFilter(column_name="mission+ephem", group=m)
-        # source = df
         view = CDSView(filter=group)
-        # source = df
-        # print(source)
-        # print(df_filt)
+
         p.scatter(
             x="mjd",
             y="delta_f",
@@ -317,7 +313,6 @@ def plot_residuals(
 
     markers = factor_mark("mission", MARKERS, factors=all_missions)
     for m in mission_ephem_combs:
-        print(m)
         group = GroupFilter(column_name="mission+ephem", group=m)
         # source = df
         view = CDSView(filter=group)
@@ -326,7 +321,6 @@ def plot_residuals(
         # source = ColumnDataSource(df_filt)
         filt_source = ColumnDataSource(df_filt)
 
-        print(df_filt)
         p.scatter(
             x="mjd",
             y="delta_t",
@@ -418,8 +412,6 @@ def main(args=None):
     if freq_units_str.startswith("u"):
         freq_units_str = r"\mu{}" + freq_units_str[1:]
 
-    print((u.s.to(args.time_units) / u.s).value)
-    print((u.Hz.to(args.freq_units) / u.Hz).value)
     p1 = plot_residuals(
         dataset,
         glitch_data,
