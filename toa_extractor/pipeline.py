@@ -15,8 +15,135 @@ from .utils import output_name, encode_image_file
 from .utils.data_manipulation import get_events_from_fits
 from .utils.config import load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
-from .utils.fit_crab_profiles import create_template_from_profile_table
-from .data_setup import GetInfo, GetParfile, GetTemplate, GetPulseFreq, PlotPhaseogram
+from .utils.fit_crab_profiles import (
+    create_template_from_profile_table,
+    _plot_profile_and_fit,
+    default_crab_model,
+)
+from .data_setup import (
+    GetInfo,
+    GetParfile,
+    GetTemplate,
+    GetPulseFreq,
+    PlotPhaseogram,
+    GetPhaseogram,
+    _plot_phaseogram,
+    _get_and_normalize_phaseogram,
+)
+
+
+def plot_complete_diagnostics(
+    phaseogram_files, model_fit, phase_max=None, model_init=None, output_fname=None
+):
+    """Make a pretty plot to show how the fit went."""
+
+    n_phas_rows = len(phaseogram_files)
+
+    profile = 0.0
+    phaseograms = []
+    for phaseogram in phaseogram_files:
+        phaseograms.append(Table.read(phaseogram))
+
+    phases = phaseograms[0].meta["phase"]
+
+    for phaseogram_table in phaseograms:
+        phaseogram = phaseogram_table["profile"]
+        profile += np.sum(phaseogram, axis=0)
+
+    if phase_max is None:
+        phase_max = 0
+
+    if np.min(phases) >= 0 and np.max(phases) <= 1:
+        phases = np.concatenate([phases - 1, phases, phases + 1])
+        profile = np.concatenate([profile, profile, profile])
+
+    fig = plt.figure(figsize=(10, 3 + 3 * n_phas_rows), layout="constrained")
+    # External GridSpec
+    gs_external = fig.add_gridspec(
+        2 + n_phas_rows,
+        3,
+        width_ratios=[2, 1, 1],
+        height_ratios=[0.65, 0.35] + [1] * n_phas_rows,
+    )
+
+    axes_full_profile = [fig.add_subplot(gs_external[i, 0]) for i in range(2)]
+    axes_zoom_peak1 = [fig.add_subplot(gs_external[i, 1]) for i in range(2)]
+    axes_zoom_peak2 = [fig.add_subplot(gs_external[i, 2]) for i in range(2)]
+
+    axes_all_profiles = [axes_full_profile, axes_zoom_peak1, axes_zoom_peak2]
+    axes_all_phaseograms = [
+        [
+            fig.add_subplot(gs_external[i + 2, j], sharex=axes_all_profiles[j][0])
+            for j in range(3)
+        ]
+        for i in range(n_phas_rows)
+    ]
+
+    for phaseogram, axrow in zip(phaseogram_files, axes_all_phaseograms):
+        local_phases, time_hrs, phas, meantime_mjd = _get_and_normalize_phaseogram(
+            phaseogram
+        )
+        _plot_phaseogram(
+            local_phases,
+            time_hrs,
+            phas,
+            meantime_mjd,
+            axrow[0],
+            title=None,
+            label_y=True,
+        )
+        for ax in axrow[1:]:
+            _plot_phaseogram(
+                local_phases,
+                time_hrs,
+                phas,
+                meantime_mjd,
+                ax,
+                title=None,
+                label_y=False,
+            )
+
+    for axpair in [axes_full_profile, axes_zoom_peak1, axes_zoom_peak2]:
+        axfit, axres = axpair[0], axpair[1]
+
+        _plot_profile_and_fit(
+            phases,
+            profile,
+            model_fit,
+            axfit,
+            axres,
+            model_init=model_init,
+            phase_max=phase_max,
+        )
+
+    for ax in axes_full_profile:
+        ax.set_xlim([-0.5, 0.5])
+    for ax in axes_zoom_peak1:
+        plt.setp(ax.get_yticklabels(), visible=False)
+
+        ax.set_xlim([phase_max - 0.125, phase_max + 0.125])
+
+    for ax in axes_zoom_peak2:
+        plt.setp(ax.get_yticklabels(), visible=False)
+
+        ax.set_xlim([phase_max + 0.25, phase_max + 0.5])
+
+    for ax in [axes_full_profile[1], axes_zoom_peak1[1], axes_zoom_peak2[1]]:
+        plt.setp(ax.get_xticklabels(), visible=False)
+    for ax in axes_all_phaseograms[-1]:
+        ax.set_xlabel("Pulse Phase")
+        ax.axvline(0, ls="--", color="k")
+
+    for ax in [axes_full_profile[0], axes_zoom_peak1[0], axes_zoom_peak2[0]]:
+        plt.setp(ax.get_xticklabels(), visible=False)
+
+    axes_full_profile[0].set_ylabel("Counts")
+    axes_full_profile[1].set_ylabel("Residuals")
+    axes_zoom_peak2[0].legend()
+    if output_fname is not None:
+        plt.savefig(output_fname, dpi=150)
+    else:
+        plt.show()
 
 
 class TOAPipeline(luigi.Task):
@@ -103,7 +230,16 @@ class PlotDiagnostics(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetResidual(
+        yield GetResidual(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield GetFoldedProfile(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield GetProfileFit(
+            self.fname, self.config_file, self.version, self.worker_timeout
+        )
+        yield GetPhaseogram(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
 
@@ -113,126 +249,34 @@ class PlotDiagnostics(luigi.Task):
         )
 
     def run(self):
-        prof_file = (
-            GetFoldedProfile(
+        profile_fit_file = (
+            GetProfileFit(
                 self.fname, self.config_file, self.version, self.worker_timeout
             )
             .output()
             .path
         )
-        prof_table = Table.read(prof_file)
-
-        template_file = (
-            GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
+        phaseogram_file = (
+            GetPhaseogram(
+                self.fname, self.config_file, self.version, self.worker_timeout
+            )
             .output()
             .path
         )
-        template_table = Table.read(template_file, format="ascii.ecsv")
+        profile_fit_table = Table.read(profile_fit_file)
 
-        residual_file = (
-            GetResidual(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+        init_model = default_crab_model(init_pars=profile_fit_table.meta["model_init"])
+        best_fit_model = default_crab_model(
+            init_pars=profile_fit_table.meta["best_fit"]
         )
-        residual_dict = load_yaml_file(residual_file)
+        phaseograms = open(phaseogram_file).read().splitlines()
 
-        fig = plt.figure()
-        pphase = prof_table["phase"]
-        pphase = np.concatenate([pphase - 2, pphase - 1, pphase, pphase + 1])
-
-        def normalize_profile(ref_profile):
-            ref_std_prof = np.std(np.diff(ref_profile)) / 1.4
-            ref_min = np.median(
-                ref_profile[ref_profile < ref_profile.min() + 3 * ref_std_prof]
-            )
-            ref_max = np.median(
-                ref_profile[ref_profile > ref_profile.max() - 3 * ref_std_prof]
-            )
-            prof = ref_profile - ref_min
-            prof /= ref_max - ref_min
-
-            return prof
-
-        prof = normalize_profile(prof_table["profile"])
-        prof = np.concatenate([prof, prof, prof, prof])
-        prof_raw = None
-        if "profile_raw" in prof_table.colnames:
-            prof_raw = normalize_profile(prof_table["profile_raw"])
-            prof_raw = np.concatenate([prof_raw, prof_raw, prof_raw, prof_raw])
-
-        tphase = pphase / prof_table.meta["F0"]
-
-        temp = template_table["profile"] - template_table["profile"].min()
-        temp = temp / temp.max()
-        temp = np.concatenate([temp, temp, temp, temp])
-
-        minres = residual_dict["residual"] - residual_dict["residual_err"]
-        maxres = residual_dict["residual"] + residual_dict["residual_err"]
-
-        main_ax = plt.gca()
-        # inset Axes....
-        x1, x2, y1, y2 = (
-            residual_dict["residual"] - 2e-3,
-            residual_dict["residual"] + 2e-3,
-            -0.1,
-            1.1,
-        )  # subregion of the original image
-        axins = main_ax.inset_axes(
-            [0.65, 0.03, 0.47, 0.94],
-            xlim=(x1, x2),
-            ylim=(y1, y2),
-            xticklabels=[],
-            yticklabels=[],
-            zorder=20,
+        plot_complete_diagnostics(
+            phaseograms,
+            model_fit=best_fit_model,
+            model_init=init_model,
+            output_fname=self.output().path,
         )
-        axins.tick_params(axis="x", direction="in", pad=-15)
-        import matplotlib.ticker as ticker
-
-        ticks = ticker.FuncFormatter(lambda x, pos: "{0:g}".format(x * 1000))
-        axins.xaxis.set_major_formatter(ticks)
-        axins.set_xlabel("Residual (ms)", labelpad=-30)
-        main_ax.indicate_inset_zoom(axins, edgecolor="black")
-        if prof_raw is not None:
-            main_ax.plot(
-                tphase,
-                prof_raw,
-                color="red",
-                alpha=0.5,
-                zorder=0,
-                ds="steps-mid",
-            )
-
-        for ax in main_ax, axins:
-            ax.plot(tphase, prof, color="red", ds="steps-mid")
-            ax.plot(
-                tphase,
-                temp,
-                color="grey",
-                zorder=0,
-                lw=1,
-                alpha=0.5,
-            )
-            ax.plot(
-                tphase + residual_dict["residual"],
-                temp,
-                color="k",
-                zorder=10,
-                lw=2,
-            )
-
-            ax.axvspan(minres, maxres, color="#9999dd")
-        # main_ax.axvline(0, color="k")
-        axins.axvline(0, color="k", alpha=0.5, ls=":")
-        main_ax.set_xlabel("Time (s)")
-        main_ax.set_ylabel("Flux (arbitrary units)")
-        main_ax.set_xlim(
-            -1 / prof_table.meta["F0"] + 1.5e-2, 1 / prof_table.meta["F0"] + 1.5e-2
-        )
-
-        plt.tight_layout()
-        plt.savefig(self.output().path, dpi=100)
-
-        plt.close(fig)
 
 
 class GetResidual(luigi.Task):

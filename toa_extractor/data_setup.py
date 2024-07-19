@@ -33,13 +33,17 @@ def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_windo
 
     for iph in range(normalized_phaseogram.shape[1]):
         profile = normalized_phaseogram[:, iph]
+        if sum(profile) < 10:
+            continue
         if len(profile) > 200:
             window_length = profile.size / 50
             polyorder = min(3, window_length - 1)
             profile = savgol_filter(
                 profile, window_length, polyorder, mode="wrap", cval=0.0
             )
-        normalized_phaseogram[:, iph] = profile / profile.max()
+        profile = profile - profile.min()
+        profile = profile / profile.max()
+        normalized_phaseogram[:, iph] = profile
 
     meantime_mjd = round(np.mean(table.meta["time"]) / 86400 + table.meta["mjdref"], 1)
     meantime = (meantime_mjd - table.meta["mjdref"]) * 86400
@@ -55,6 +59,13 @@ def _plot_phaseogram(
 ):
     from stingray.pulse.search import plot_phaseogram
 
+    plot_phaseogram(
+        phas,
+        phases - 1,
+        time_hrs,
+        ax=ax,
+        cmap="Greys",
+    )
     plot_phaseogram(
         phas,
         phases,
@@ -196,7 +207,12 @@ class GetPhaseogram(luigi.Task):
         nbin = 512
         edge_idxs = np.searchsorted(mjds, mjd_edges)
         output_files = []
+
         for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
+            if edge_idxs[i] >= events.time.size:
+                warnings.warn("No events in this interval")
+                continue
+
             correction_fun = get_phase_func_from_ephemeris_file(
                 mjdstart,
                 mjdstop,
@@ -241,7 +257,7 @@ class GetPhaseogram(luigi.Task):
             new_file_name = output_name(
                 self.fname, self.version, f"_dynprof_{i:000d}.hdf5"
             )
-            result_table.write(new_file_name, overwrite=True)
+            result_table.write(new_file_name, overwrite=True, serialize_meta=True)
             output_files.append(new_file_name)
 
         with open(self.output().path, "w") as fobj:
@@ -303,6 +319,10 @@ class GetPulseFreq(luigi.Task):
 
         result_table = []
         for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
+            if edge_idxs[i] >= events.time.size:
+                warnings.warn("No events in this interval")
+                continue
+
             model = get_model(parfiles[i])
 
             good = slice(edge_idxs[i], edge_idxs[i + 1])
@@ -353,7 +373,9 @@ class GetPulseFreq(luigi.Task):
             log.info(best_cand_table[0])
             result_table.append(best_cand_table[0])
         result_table = vstack(result_table)
-        result_table.write(self.output().path, format="ascii.ecsv", overwrite=True)
+        result_table.write(
+            self.output().path, format="ascii.ecsv", overwrite=True, serialize_meta=True
+        )
 
 
 class GetParfile(luigi.Task):
