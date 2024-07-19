@@ -6,6 +6,7 @@ import numpy as np
 from astropy import log
 from astropy import units as u
 from astropy.table import vstack, Table
+import matplotlib.pyplot as plt
 
 from stingray.pulse.pulsar import get_model
 from hendrics.efsearch import (
@@ -22,6 +23,54 @@ from .utils.data_manipulation import get_observing_info
 from .utils.data_manipulation import get_events_from_fits
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 from pulse_deadtime_fix.core import _create_weights
+
+
+def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr"):
+
+    table = Table.read(phaseogram_file)
+    normalized_phaseogram = (table["profile"].T).astype(float)
+
+    for iph in range(normalized_phaseogram.shape[1]):
+        normalized_phaseogram[:, iph] = (
+            normalized_phaseogram[:, iph] / normalized_phaseogram[:, iph].max()
+        )
+
+    meantime_mjd = round(np.mean(table.meta["time"]) / 86400 + table.meta["mjdref"], 1)
+    meantime = (meantime_mjd - table.meta["mjdref"]) * 86400
+    time_factor = (1 * u.s / u.Unit(time_units)).to("").value
+    times = (table.meta["time"] - meantime) * time_factor
+    phases = table.meta["phase"]
+
+    return phases, times, normalized_phaseogram, meantime_mjd
+
+
+def _plot_phaseogram(
+    phases, time_hrs, phas, meantime_mjd, ax, title=None, label_y=True
+):
+    from stingray.pulse.search import plot_phaseogram
+
+    plot_phaseogram(
+        phas,
+        phases,
+        time_hrs,
+        ax=ax,
+        cmap="twilight",
+    )
+    plot_phaseogram(
+        phas,
+        phases + 1,
+        time_hrs,
+        ax=ax,
+        cmap="twilight",
+    )
+    ax.set_title(title)
+    if label_y:
+        ax.set_ylabel(f"Time (hr) since {meantime_mjd:.1f}")
+    else:
+        plt.setp(ax.get_yticklabels(), visible=False)
+        # plt.setp(ax.get_ylabel(), None)
+        ax.yaxis.label.set_visible(False)
+    ax.grid(True)
 
 
 class PlotPhaseogram(luigi.Task):
@@ -41,9 +90,7 @@ class PlotPhaseogram(luigi.Task):
         )
 
     def run(self):
-        import matplotlib.pyplot as plt
         import matplotlib.gridspec as gridspec
-        from stingray.pulse.search import plot_phaseogram
 
         phaseograms = open(self.input().path, "r").read().splitlines()
         nphaseograms = len(phaseograms)
@@ -57,37 +104,32 @@ class PlotPhaseogram(luigi.Task):
         for i, phaseogram in enumerate(phaseograms):
             ax1 = fig.add_subplot(gs[i, 0])
             ax2 = fig.add_subplot(gs[i, 1])
-            table = Table.read(phaseogram)
-            phas = (table["profile"].T).astype(float)
-
-            for iph in range(phas.shape[1]):
-                phas[:, iph] = phas[:, iph] / phas[:, iph].max()
-
-            meantime_mjd = round(
-                np.mean(table.meta["time"]) / 86400 + table.meta["mjdref"], 1
+            phases, time_hrs, phas, meantime_mjd = _get_and_normalize_phaseogram(
+                phaseogram
             )
-            meantime = (meantime_mjd - table.meta["mjdref"]) * 86400
-            time_hrs = (table.meta["time"] - meantime) / 3600
-            for ax in ax1, ax2:
-                plot_phaseogram(
-                    phas,
-                    table.meta["phase"],
-                    time_hrs,
-                    ax=ax,
-                    cmap="twilight",
-                )
-                plot_phaseogram(
-                    phas,
-                    table.meta["phase"] + 1,
-                    time_hrs,
-                    ax=ax,
-                    cmap="twilight",
-                )
-                ax.set_title(f"Phaseogram {i}")
-                ax.set_ylabel(f"Time (hr) since {meantime_mjd:.1f}")
-                ax.grid(True)
+
+            _plot_phaseogram(
+                phases,
+                time_hrs,
+                phas,
+                meantime_mjd,
+                ax1,
+                title=f"Phaseogram {i}",
+                label_y=True,
+            )
+            _plot_phaseogram(
+                phases,
+                time_hrs,
+                phas,
+                meantime_mjd,
+                ax2,
+                title=f"Phaseogram {i}",
+                label_y=False,
+            )
             imax = np.argmax(phas.sum(axis=1))
-            phmax = normalize_phase_0d5(table.meta["phase"][imax]) + 1
+
+            imax = np.argmax(phas.sum(axis=1))
+            phmax = normalize_phase_0d5(phases[imax]) + 1
             print(imax, phmax)
             ax2.set_xlim(phmax - 0.1, phmax + 0.1)
 
