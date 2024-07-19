@@ -42,8 +42,8 @@ def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual")
     df["delta_f"] = df[f_res_label]
     df["delta_f_str"] = res_str
 
-    df["delta_f_upper"] = np.array(df[res_label] + df[res_label + "_err"])
-    df["delta_f_lower"] = np.array(df[res_label] - df[res_label + "_err"])
+    df["delta_f_upper"] = np.array(df[f_res_label] + df[f_res_label + "_err"])
+    df["delta_f_lower"] = np.array(df[f_res_label] - df[f_res_label + "_err"])
 
     # ---- Time residuals ----
     factor = ((1 * u.s) / (1 * u.Unit(time_units))).to("").value
@@ -340,8 +340,8 @@ def plot_residuals(
         )
         errorbar1 = Whisker(
             base="mjd",
-            upper="upper",
-            lower="lower",
+            upper="delta_t_upper",
+            lower="delta_t_lower",
             source=filt_source,
             level="annotation",
             line_width=2,
