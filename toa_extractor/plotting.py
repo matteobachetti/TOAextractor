@@ -102,7 +102,7 @@ def plot_frequency_history(
     <div>
         <div>
             <img
-                src="data:image/jpg;base64,@phas_img" height="192" alt="Bla" width="248"
+                src="data:image/jpg;base64,@phas_img" alt="Bla" width="248"
                 style="float: left; margin: 0px 15px 15px 0px;"
                 border="2"
             ></img>
@@ -248,7 +248,7 @@ def plot_residuals(
     <div>
         <div>
             <img
-                src="data:image/jpg;base64,@img" height="192" alt="Bla" width="248"
+                src="data:image/jpg;base64,@img" alt="Bla" width="248"
                 style="float: left; margin: 0px 15px 15px 0px;"
                 border="2"
             ></img>
