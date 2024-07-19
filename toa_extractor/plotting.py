@@ -178,7 +178,7 @@ def plot_frequency_history(
         filt_source = ColumnDataSource(df_filt)
         group = GroupFilter(column_name="mission+ephem", group=m)
         # source = df
-        view = CDSView(source=full_dataset, filter=group)
+        view = CDSView(filter=group)
         # source = df
         # print(source)
         # print(df_filt)
@@ -320,7 +320,7 @@ def plot_residuals(
         print(m)
         group = GroupFilter(column_name="mission+ephem", group=m)
         # source = df
-        view = CDSView(source=full_dataset, filter=group)
+        view = CDSView(filter=group)
 
         df_filt = full_dataset.to_df()[df["mission+ephem"] == m]
         # source = ColumnDataSource(df_filt)
