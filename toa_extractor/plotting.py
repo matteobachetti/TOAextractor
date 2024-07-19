@@ -10,6 +10,7 @@ from bokeh.transform import factor_cmap, factor_mark
 from bokeh.palettes import Category20b_20
 from bokeh.layouts import column
 from .utils.crab import retrieve_cgro_ephemeris
+from .utils import root_name
 from astropy import units as u
 from uncertainties import ufloat
 
@@ -408,7 +409,7 @@ def main(args=None):
     parser.add_argument("file", help="Input summary CSV file", type=str)
     parser.add_argument("--test", action="store_true", default=False)
     parser.add_argument(
-        "-o", "--output", help="Output file name", type=str, default="summary.html"
+        "-o", "--output", help="Output file name", type=str, default=None
     )
     parser.add_argument(
         "-r",
@@ -421,6 +422,9 @@ def main(args=None):
     parser.add_argument("--freq-units", help="Frequency units", type=str, default="uHz")
 
     args = parser.parse_args(args)
+    if args.output is None:
+        args.output = root_name(args.file) + ".html"
+
     if args.residual == "toa":
         res_label = "residual"
     else:
