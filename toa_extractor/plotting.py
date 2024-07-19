@@ -4,6 +4,8 @@ import numpy as np
 from astropy.table import Table
 from bokeh.plotting import figure, output_file, show, save
 from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation, BoxAnnotation
+from bokeh.models import CDSView, ColumnDataSource, IndexFilter, GroupFilter
+
 from bokeh.transform import factor_cmap, factor_mark
 from bokeh.palettes import Category20b_20
 from bokeh.layouts import column
@@ -15,201 +17,51 @@ curdir = os.path.dirname(__file__)
 datadir = os.path.join(curdir, "data")
 
 
-def plot_frequency_history(fname, freq_units="mHz", output_fname=None, test=False):
-    if output_fname is None:
-        output_fname = "summary_freq.html"
-
-    glitch_data = Table.read(os.path.join(datadir, "jb_crab_glitches.ecsv"))
+def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual"):
 
     df = pd.read_csv(fname)
-    res_label = "delta_f"
-    df[res_label] = df["local_best_freq"] - df["initial_freq_estimate"]
-    df[res_label + "_err"] = (
+
+    # ---- Frequency residuals ----
+    f_res_label = "delta_f"
+    df[f_res_label] = df["local_best_freq"] - df["initial_freq_estimate"]
+    df[f_res_label + "_err"] = (
         np.abs(df["local_best_freq_err_n"]) + np.abs(df["local_best_freq_err_p"])
     ) / 2
     factor = ((1 * u.Hz) / (1 * u.Unit(freq_units))).to("").value
-    for col in res_label, res_label + "_err":
-        diff_str = col.replace(res_label, "")
-        df[res_label + f"_{freq_units}" + diff_str] = df[col] * factor
-    res_label = res_label + f"_{freq_units}"
+    for col in f_res_label, f_res_label + "_err":
+        diff_str = col.replace(f_res_label, "")
+        df[f_res_label + f"_{freq_units}" + diff_str] = df[col] * factor
+
+    f_res_label = f_res_label + f"_{freq_units}"
 
     res_str = [
         f"{ufloat(res, err):P} {freq_units}"
-        for res, err in zip(df[res_label], df[res_label + "_err"])
+        for res, err in zip(df[f_res_label], df[f_res_label + "_err"])
     ]
-    df["freq_residual_str"] = res_str
+    df["delta_f"] = df[f_res_label]
+    df["delta_f_str"] = res_str
 
-    df["upper"] = np.array(df[res_label] + df[res_label + "_err"])
-    df["lower"] = np.array(df[res_label] - df[res_label + "_err"])
-    df["MJD_int"] = df["mjd"].astype(int)
+    df["delta_f_upper"] = np.array(df[res_label] + df[res_label + "_err"])
+    df["delta_f_lower"] = np.array(df[res_label] - df[res_label + "_err"])
 
-    df["mission+instr"] = [
-        f"{m}/{ins.upper()}" for m, ins in zip(df["mission"], df["instrument"])
-    ]
-    df["mission+ephem"] = [
-        f"{m}-{e.upper()}" for m, e in zip(df["mission+instr"], df["ephem"])
-    ]
-    mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
-    mission_instr_combs = sorted(list(set(df["mission+instr"])))
-    all_missions = sorted(list(set(df["mission"])))
-
-    if len(mission_instr_combs) == len(mission_ephem_combs):
-        mission_ephem_combs = mission_instr_combs
-        df["mission+ephem"] = df["mission+instr"]
-
-    TOOLTIPS = """
-    <div>
-        <div>
-            <img
-                src="data:image/jpg;base64,@img" height="192" alt="Bla" width="248"
-                style="float: left; margin: 0px 15px 15px 0px;"
-                border="2"
-            ></img>
-        </div>
-        <div>
-            <span style="font-size: 17px; font-weight: bold;">@mission</span>
-            <span style="font-size: 15px; color: #966;">[@instrument]</span>
-        </div>
-        <div>
-            <span>ObsID @obsid</span>
-        </div>
-        <div>
-            <span style="font-size: 15px; color: #696;">@freq_residual_str</span>
-        </div>
-    </div>
-    """
-    p = figure(tooltips=TOOLTIPS, width=1200, height=800)
-
-    for row in glitch_data:
-        mjd = float(row["MJD"])
-        mjde = float(row["MJDe"])
-
-        poly = BoxAnnotation(
-            fill_color="red",
-            left=mjd - 0.5 * mjde,
-            right=mjd + 0.5 * mjde,
-            fill_alpha=0.2,
-            line_width=2,
-            line_alpha=0.2,
-            line_color="red",
-        )
-        p.add_layout(poly)
-
-    color = factor_cmap(
-        "mission+ephem",
-        palette=Category20b_20,
-        factors=mission_ephem_combs,
-        end=len(mission_ephem_combs),
-    )
-    MARKERS = [
-        "asterisk",
-        "circle",
-        "diamond",
-        "hex",
-        "inverted_triangle",
-        "square",
-        "star",
-        "triangle",
-        "triangle_dot",
-        "star_dot",
-        "square_cross",
-        "hex_dot",
-        "plus",
-        "square_dot",
-        "square_pin",
-        "square_x",
-        "triangle_pin",
-        "x",
-        "y",
-        "circle_cross",
-        "circle_dot",
-        "circle_x",
-        "circle_y",
-        "cross",
-        "dash",
-        "diamond_cross",
-        "diamond_dot",
-        "dot",
-    ]
-
-    markers = factor_mark("mission", MARKERS, factors=all_missions)
-    for m in mission_ephem_combs:
-        print(m)
-        df_filt = df[df["mission+ephem"] == m]
-        source = ColumnDataSource(df_filt)
-
-        print(df_filt)
-        p.scatter(
-            x="mjd",
-            y=res_label,
-            source=source,
-            size=10,
-            color=color,
-            legend_label=m,
-            muted_alpha=0.1,
-            marker=markers,
-        )
-        errorbar1 = Whisker(
-            base="mjd",
-            upper="upper",
-            lower="lower",
-            source=source,
-            level="annotation",
-            line_width=2,
-            line_color=color,
-            line_alpha=0.1,
-        )
-        errorbar1.upper_head.size = 0
-        errorbar1.lower_head.size = 0
-        p.add_layout(errorbar1)
-        errorbar2 = Whisker(
-            base=res_label,
-            upper="mjdstop",
-            lower="mjdstart",
-            source=source,
-            dimension="width",
-            level="annotation",
-            line_width=2,
-            line_color=color,
-            line_alpha=0.1,
-        )
-        errorbar2.upper_head.line_color = color
-        errorbar2.lower_head.line_color = color
-        p.add_layout(errorbar2)
-    p.title.text = "Residuals"
-    p.xaxis.axis_label = "MJD"
-    p.yaxis.axis_label = f"Residual ({freq_units})"
-    p.legend.click_policy = "mute"
-
-    return p
-
-
-def plot_residuals(
-    fname, time_units="us", res_label="fit_residual", output_fname=None, test=False
-):
-    eph_table = retrieve_cgro_ephemeris()
-    if output_fname is None:
-        output_fname = f"summary_{res_label}.html"
-
-    glitch_data = Table.read(os.path.join(datadir, "jb_crab_glitches.ecsv"))
-    output_file("TOAs.html")
-
-    df = pd.read_csv(fname)
-
+    # ---- Time residuals ----
     factor = ((1 * u.s) / (1 * u.Unit(time_units))).to("").value
     for col in res_label, res_label + "_err":
         diff_str = col.replace(res_label, "")
         df[res_label + f"_{time_units}" + diff_str] = df[col] * factor
+
     res_label = res_label + f"_{time_units}"
 
     res_str = [
         f"{ufloat(res, err):P} {time_units}"
         for res, err in zip(df[res_label], df[res_label + "_err"])
     ]
-    df["residual_str"] = res_str
+    df["delta_t"] = df[res_label]
+    df["delta_t_str"] = res_str
 
-    df["upper"] = np.array(df[res_label] + df[res_label + "_err"])
-    df["lower"] = np.array(df[res_label] - df[res_label + "_err"])
+    df["delta_t_upper"] = np.array(df[res_label] + df[res_label + "_err"])
+    df["delta_t_lower"] = np.array(df[res_label] - df[res_label + "_err"])
+
     df["MJD_int"] = df["mjd"].astype(int)
 
     df["mission+instr"] = [
@@ -220,11 +72,31 @@ def plot_residuals(
     ]
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
     mission_instr_combs = sorted(list(set(df["mission+instr"])))
-    all_missions = sorted(list(set(df["mission"])))
 
     if len(mission_instr_combs) == len(mission_ephem_combs):
         mission_ephem_combs = mission_instr_combs
         df["mission+ephem"] = df["mission+instr"]
+
+    if len(mission_instr_combs) == len(mission_ephem_combs):
+        mission_ephem_combs = mission_instr_combs
+        df["mission+ephem"] = df["mission+instr"]
+
+    return ColumnDataSource(df)
+
+
+def plot_frequency_history(
+    full_dataset,
+    glitch_data,
+    output_fname=None,
+    test=False,
+    res_label="Residuals",
+    **figure_kwargs,
+):
+    if output_fname is None:
+        output_fname = "summary_freq.html"
+    df = full_dataset.to_df()
+    mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
+    all_missions = sorted(list(set(df["mission"])))
 
     TOOLTIPS = """
     <div>
@@ -243,24 +115,11 @@ def plot_residuals(
             <span>ObsID @obsid</span>
         </div>
         <div>
-            <span style="font-size: 15px; color: #696;">@residual_str</span>
+            <span style="font-size: 15px; color: #696;">@delta_f_str</span>
         </div>
     </div>
     """
-    p = figure(tooltips=TOOLTIPS, width=1200, height=800)
-
-    for row in eph_table:
-        # The rms is in milliperiods, but here we use milliseconds.
-        rms = row["RMS"] / 1000 / row["f0(s^-1)"] * factor
-
-        poly = PolyAnnotation(
-            fill_alpha=0.1,
-            fill_color="green",
-            line_width=0,
-            xs=[row["MJD1"], row["MJD1"], row["MJD2"], row["MJD2"]],
-            ys=[-rms, rms, rms, -rms],
-        )
-        p.add_layout(poly)
+    p = figure(tooltips=TOOLTIPS, **figure_kwargs)
 
     for row in glitch_data:
         mjd = float(row["MJD"])
@@ -276,16 +135,6 @@ def plot_residuals(
             line_color="red",
         )
         p.add_layout(poly)
-    poly = BoxAnnotation(
-        fill_color="grey",
-        top=(-0.000344 + 0.000040) * factor,  # Roths et al. 2004
-        bottom=(-0.000344 - 0.000040) * factor,
-        fill_alpha=0.2,
-        line_width=2,
-        line_alpha=0.2,
-        line_color="black",
-    )
-    p.add_layout(poly)
 
     color = factor_cmap(
         "mission+ephem",
@@ -328,24 +177,29 @@ def plot_residuals(
     for m in mission_ephem_combs:
         print(m)
         df_filt = df[df["mission+ephem"] == m]
-        source = ColumnDataSource(df_filt)
-
-        print(df_filt)
+        filt_source = ColumnDataSource(df_filt)
+        group = GroupFilter(column_name="mission+ephem", group=m)
+        # source = df
+        view = CDSView(source=full_dataset, filter=group)
+        # source = df
+        # print(source)
+        # print(df_filt)
         p.scatter(
             x="mjd",
-            y=res_label,
-            source=source,
+            y="delta_f",
+            source=full_dataset,
             size=10,
             color=color,
             legend_label=m,
             muted_alpha=0.1,
             marker=markers,
+            view=view,
         )
         errorbar1 = Whisker(
             base="mjd",
-            upper="upper",
-            lower="lower",
-            source=source,
+            upper="delta_f_upper",
+            lower="delta_f_lower",
+            source=filt_source,
             level="annotation",
             line_width=2,
             line_color=color,
@@ -355,10 +209,10 @@ def plot_residuals(
         errorbar1.lower_head.size = 0
         p.add_layout(errorbar1)
         errorbar2 = Whisker(
-            base=res_label,
+            base="delta_f",
             upper="mjdstop",
             lower="mjdstart",
-            source=source,
+            source=filt_source,
             dimension="width",
             level="annotation",
             line_width=2,
@@ -368,9 +222,179 @@ def plot_residuals(
         errorbar2.upper_head.line_color = color
         errorbar2.lower_head.line_color = color
         p.add_layout(errorbar2)
-    p.title.text = "Residuals"
+    # p.title.text = "Residuals"
     p.xaxis.axis_label = "MJD"
-    p.yaxis.axis_label = f"Residual ({time_units})"
+    p.yaxis.axis_label = f"{res_label}"
+    p.legend.click_policy = "mute"
+
+    return p
+
+
+def plot_residuals(
+    full_dataset,
+    glitch_data,
+    output_fname=None,
+    test=False,
+    res_label="Residuals",
+    **figure_kwargs,
+):
+    # eph_table = retrieve_cgro_ephemeris()
+
+    df = full_dataset.to_df()
+    mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
+    all_missions = sorted(list(set(df["mission"])))
+
+    TOOLTIPS = """
+    <div>
+        <div>
+            <img
+                src="data:image/jpg;base64,@img" height="192" alt="Bla" width="248"
+                style="float: left; margin: 0px 15px 15px 0px;"
+                border="2"
+            ></img>
+        </div>
+        <div>
+            <span style="font-size: 17px; font-weight: bold;">@mission</span>
+            <span style="font-size: 15px; color: #966;">[@instrument]</span>
+        </div>
+        <div>
+            <span>ObsID @obsid</span>
+        </div>
+        <div>
+            <span style="font-size: 15px; color: #696;">@delta_t_str</span>
+        </div>
+    </div>
+    """
+    p = figure(tooltips=TOOLTIPS, **figure_kwargs)
+
+    # for row in eph_table:
+    #     # The rms is in milliperiods, but here we use milliseconds.
+    #     rms = row["RMS"] / 1000 / row["f0(s^-1)"] * factor
+
+    #     poly = PolyAnnotation(
+    #         fill_alpha=0.1,
+    #         fill_color="green",
+    #         line_width=0,
+    #         xs=[row["MJD1"], row["MJD1"], row["MJD2"], row["MJD2"]],
+    #         ys=[-rms, rms, rms, -rms],
+    #     )
+    #     p.add_layout(poly)
+
+    for row in glitch_data:
+        mjd = float(row["MJD"])
+        mjde = float(row["MJDe"])
+
+        poly = BoxAnnotation(
+            fill_color="red",
+            left=mjd - 0.5 * mjde,
+            right=mjd + 0.5 * mjde,
+            fill_alpha=0.2,
+            line_width=2,
+            line_alpha=0.2,
+            line_color="red",
+        )
+        p.add_layout(poly)
+    # poly = BoxAnnotation(
+    #     fill_color="grey",
+    #     top=(-0.000344 + 0.000040) * factor,  # Roths et al. 2004
+    #     bottom=(-0.000344 - 0.000040) * factor,
+    #     fill_alpha=0.2,
+    #     line_width=2,
+    #     line_alpha=0.2,
+    #     line_color="black",
+    # )
+    # p.add_layout(poly)
+
+    color = factor_cmap(
+        "mission+ephem",
+        palette=Category20b_20,
+        factors=mission_ephem_combs,
+        end=len(mission_ephem_combs),
+    )
+    MARKERS = [
+        "asterisk",
+        "circle",
+        "diamond",
+        "hex",
+        "inverted_triangle",
+        "square",
+        "star",
+        "triangle",
+        "triangle_dot",
+        "star_dot",
+        "square_cross",
+        "hex_dot",
+        "plus",
+        "square_dot",
+        "square_pin",
+        "square_x",
+        "triangle_pin",
+        "x",
+        "y",
+        "circle_cross",
+        "circle_dot",
+        "circle_x",
+        "circle_y",
+        "cross",
+        "dash",
+        "diamond_cross",
+        "diamond_dot",
+        "dot",
+    ]
+
+    markers = factor_mark("mission", MARKERS, factors=all_missions)
+    for m in mission_ephem_combs:
+        print(m)
+        group = GroupFilter(column_name="mission+ephem", group=m)
+        # source = df
+        view = CDSView(source=full_dataset, filter=group)
+
+        df_filt = full_dataset.to_df()[df["mission+ephem"] == m]
+        # source = ColumnDataSource(df_filt)
+        filt_source = ColumnDataSource(df_filt)
+
+        print(df_filt)
+        p.scatter(
+            x="mjd",
+            y="delta_t",
+            source=full_dataset,
+            size=10,
+            color=color,
+            legend_label=m,
+            muted_alpha=0.1,
+            marker=markers,
+            view=view,
+        )
+        errorbar1 = Whisker(
+            base="mjd",
+            upper="upper",
+            lower="lower",
+            source=filt_source,
+            level="annotation",
+            line_width=2,
+            line_color=color,
+            line_alpha=0.1,
+        )
+        errorbar1.upper_head.size = 0
+        errorbar1.lower_head.size = 0
+        p.add_layout(errorbar1)
+        errorbar2 = Whisker(
+            base="delta_t",
+            upper="mjdstop",
+            lower="mjdstart",
+            source=filt_source,
+            dimension="width",
+            level="annotation",
+            line_width=2,
+            line_color=color,
+            line_alpha=0.1,
+        )
+        errorbar2.upper_head.line_color = color
+        errorbar2.lower_head.line_color = color
+        p.add_layout(errorbar2)
+    # p.title.text = "Residuals"
+    p.xaxis.axis_label = "MJD"
+    p.yaxis.axis_label = f"{res_label}"
     p.legend.click_policy = "mute"
 
     return p
@@ -394,6 +418,7 @@ def main(args=None):
         default="fit",
     )
     parser.add_argument("--time-units", help="Time units", type=str, default="us")
+    parser.add_argument("--freq-units", help="Frequency units", type=str, default="uHz")
 
     args = parser.parse_args(args)
     if args.residual == "toa":
@@ -401,18 +426,46 @@ def main(args=None):
     else:
         res_label = "fit_residual"
 
-    p1 = plot_residuals(
+    dataset = get_data(
         args.file,
         time_units=args.time_units,
+        freq_units=args.freq_units,
         res_label=res_label,
+    )
+
+    glitch_data = Table.read(os.path.join(datadir, "jb_crab_glitches.ecsv"))
+
+    time_units_str = u.Unit(args.time_units).to_string()
+    freq_units_str = u.Unit(args.freq_units).to_string()
+    if time_units_str.startswith("u"):
+        time_units_str = r"\mu{}" + time_units_str[1:]
+    if freq_units_str.startswith("u"):
+        freq_units_str = r"\mu{}" + freq_units_str[1:]
+
+    print((u.s.to(args.time_units) / u.s).value)
+    print((u.Hz.to(args.freq_units) / u.Hz).value)
+    p1 = plot_residuals(
+        dataset,
+        glitch_data,
         output_fname=args.output,
         test=args.test,
+        width=1200,
+        height=400,
+        res_label=rf"$$\Delta{{\rm TOA}} ({time_units_str})$$",
     )
 
     p2 = plot_frequency_history(
-        args.file, freq_units="uHz", output_fname=None, test=False
+        dataset,
+        glitch_data,
+        output_fname=None,
+        test=False,
+        width=1200,
+        height=400,
+        res_label=rf"$$\Delta\nu_{{\rm spin}} {{ (\rm {freq_units_str}) }}$$",
     )
+    p2.x_range = p1.x_range
     p = column(p1, p2)
     output_file(args.output)
     save(p)
+
     show(p)
