@@ -10,6 +10,7 @@ import astropy.units as u
 import pint
 import pint.simulation
 from pint.models import get_model
+import pint.fitter
 
 
 from astropy.coordinates import SkyCoord

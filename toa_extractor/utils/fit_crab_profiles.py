@@ -10,6 +10,83 @@ import matplotlib.pyplot as plt
 from toa_extractor.utils import root_name
 
 
+def _plot_profile_and_fit(
+    phases,
+    profile,
+    model_fit,
+    axfit,
+    axres,
+    model_init=None,
+    phase_max=None,
+    profile_raw=None,
+):
+    residuals = profile - model_fit(phases)
+
+    label = "Data"
+    if profile_raw is not None:
+        axfit.plot(
+            phases, profile_raw, ds="steps-mid", color="r", alpha=0.5, label="Data"
+        )
+        label = "Deadtime-corrected Data"
+    axfit.plot(phases, profile, ds="steps-mid", color="r", label=label)
+
+    if model_init is not None:
+        axfit.plot(
+            phases, model_init(phases), color="grey", alpha=0.5, label="Init model"
+        )
+    axfit.plot(
+        phases, model_fit(phases), color="k", zorder=20, lw=1.5, label="Fit model"
+    )
+
+    peak_colors = ["b", "navy"]
+    m = model_fit[2]
+
+    sym_lor_fit0 = lorentzian(phases, amplitude=m.amplitude00, x0=m.x00, fwhm=m.fwhm00)
+    sym_lor_fit1 = lorentzian(
+        phases, amplitude=m.amplitude01, x0=m.x00 + m.peak_separation, fwhm=m.fwhm01
+    )
+    asym_lor_fit0 = asymmetric_lorentzian(
+        phases,
+        amplitude=m.amplitude10,
+        x0=m.x00 + m.dx00,
+        fwhm1=m.fwhm10,
+        fwhm2=m.fwhm20,
+    )
+    asym_lor_fit1 = asymmetric_lorentzian(
+        phases,
+        amplitude=m.amplitude11,
+        x0=m.x00 + m.peak_separation + m.dx01,
+        fwhm1=m.fwhm11,
+        fwhm2=m.fwhm21,
+    )
+    for peak in sym_lor_fit0, asym_lor_fit0:
+        axfit.plot(
+            phases,
+            (peak + model_fit[1](phases)) * model_fit[0](phases),
+            color=peak_colors[0],
+            zorder=10,
+            ls=":",
+        )
+    for peak in sym_lor_fit1, asym_lor_fit1:
+        axfit.plot(
+            phases,
+            (peak + model_fit[1](phases)) * model_fit[0](phases),
+            color=peak_colors[1],
+            zorder=10,
+            ls=":",
+        )
+
+    axfit.grid(True)
+
+    axres.plot(phases, residuals, ds="steps-mid", color="r")
+    axres.axhline(0, color="k", ls=":")
+    axres.axhspan(-np.std(residuals), np.std(residuals), color="b", alpha=0.2)
+    if phase_max is not None:
+        axfit.axvline(phase_max, color="k", ls="--")
+        axres.axvline(phase_max, color="k", ls="--")
+    axres.grid(True)
+
+
 def normalize_phase_0d5(phase):
     """Normalize phase between -0.5 and 0.5
 
@@ -241,14 +318,6 @@ def get_initial_parameters(input_phases, profile):
     idx_2 = np.argmax(prof_filt2)
     amplitude2 = profile[idx_2] - baseline
 
-    # plt.figure()
-    # plt.plot(phases, profile, color="red")
-    # plt.plot(phases, np.roll(profile, roll_by), color="pink")
-
-    # plt.plot(phases, probe_prof / 2)
-    # plt.axvline(ph1, color="k", lw=2)
-    # plt.axvline(ph2)
-
     init_pars = {
         "amplitude_0": amplitude1,
         "amplitude_1": baseline / amplitude1,
@@ -267,7 +336,6 @@ def get_initial_parameters(input_phases, profile):
         "fwhm11_2": fwhm2 * 2,
         "fwhm21_2": fwhm2 * 2,
     }
-    print(init_pars)
     return init_pars
 
 
@@ -298,12 +366,10 @@ def fit_crab_profile(phases, profile, fitter=None):
     init_pars = get_initial_parameters(phases, profile)
     model_init = default_crab_model(init_pars=init_pars)
     model_fit = fitter(model_init, phases, profile, maxiter=200)
-
-    print(model_fit)
     return model_init, model_fit
 
 
-def fill_template_table(model_fit, nbins=512, template_table=None):
+def fill_template_table(model_fit, nbins=512, template_table=None, model_init=None):
     if template_table is None:
         template_table = Table()
     phase_max = fmin(lambda x: -model_fit(x), model_fit.x00_2)[0]
@@ -325,6 +391,11 @@ def fill_template_table(model_fit, nbins=512, template_table=None):
     for name, p, pe in zip(model_fit.param_names, par, par_err):
         template_table.meta["best_fit"][name] = p
         template_table.meta["best_fit"][name + "_err"] = pe
+    if model_init is not None:
+        par = model_init.parameters
+        template_table.meta["model_init"] = {}
+        for name, p in zip(model_init.param_names, par):
+            template_table.meta["model_init"][name] = p
 
     template_table.meta["phase_max"] = phase_max
     template_table.meta["phase_max_err"] = template_table.meta["best_fit"]["x00_2_err"]
@@ -352,70 +423,19 @@ def plot_fit_diagnostics(
     axs00 = [fig.add_subplot(gs00[i]) for i in range(2)]
     axs01 = [fig.add_subplot(gs01[i]) for i in range(2)]
     axs02 = [fig.add_subplot(gs02[i]) for i in range(2)]
-    residuals = profile - model_fit(phases)
 
     for axpair in [axs00, axs01, axs02]:
         axfit, axres = axpair[0], axpair[1]
 
-        axfit.plot(phases, profile, ds="steps-mid", color="r", label="Data")
-
-        if model_init is not None:
-            axfit.plot(
-                phases, model_init(phases), color="grey", alpha=0.5, label="Init model"
-            )
-        axfit.plot(
-            phases, model_fit(phases), color="k", zorder=20, lw=1.5, label="Fit model"
-        )
-
-        peak_colors = ["b", "navy"]
-        m = model_fit[2]
-
-        sym_lor_fit0 = lorentzian(
-            phases, amplitude=m.amplitude00, x0=m.x00, fwhm=m.fwhm00
-        )
-        sym_lor_fit1 = lorentzian(
-            phases, amplitude=m.amplitude01, x0=m.x00 + m.peak_separation, fwhm=m.fwhm01
-        )
-        asym_lor_fit0 = asymmetric_lorentzian(
+        _plot_profile_and_fit(
             phases,
-            amplitude=m.amplitude10,
-            x0=m.x00 + m.dx00,
-            fwhm1=m.fwhm10,
-            fwhm2=m.fwhm20,
+            profile,
+            model_fit,
+            axfit,
+            axres,
+            model_init=model_init,
+            phase_max=phase_max,
         )
-        asym_lor_fit1 = asymmetric_lorentzian(
-            phases,
-            amplitude=m.amplitude11,
-            x0=m.x00 + m.peak_separation + m.dx01,
-            fwhm1=m.fwhm11,
-            fwhm2=m.fwhm21,
-        )
-        for peak in sym_lor_fit0, asym_lor_fit0:
-            axfit.plot(
-                phases,
-                (peak + model_fit[1](phases)) * model_fit[0](phases),
-                color=peak_colors[0],
-                zorder=10,
-                ls=":",
-            )
-        for peak in sym_lor_fit1, asym_lor_fit1:
-            axfit.plot(
-                phases,
-                (peak + model_fit[1](phases)) * model_fit[0](phases),
-                color=peak_colors[1],
-                zorder=10,
-                ls=":",
-            )
-
-        axfit.grid(True)
-
-        axres.plot(phases, residuals, ds="steps-mid", color="r")
-        axres.axhline(0, color="k", ls=":")
-        axres.axhspan(-np.std(residuals), np.std(residuals), color="b", alpha=0.2)
-        if phase_max is not None:
-            axfit.axvline(phase_max, color="k", ls="--")
-            axres.axvline(phase_max, color="k", ls="--")
-        axres.grid(True)
 
     for ax in axs00:
         ax.set_xlim([-0.5, 0.5])
@@ -423,6 +443,7 @@ def plot_fit_diagnostics(
         plt.setp(ax.get_yticklabels(), visible=False)
 
         ax.set_xlim([phase_max - 0.125, phase_max + 0.125])
+
     for ax in axs02:
         plt.setp(ax.get_yticklabels(), visible=False)
 
@@ -453,10 +474,14 @@ def create_template_from_profile_table(
     profile_table = Table.read(input_profile_fname)
     phases, profile = profile_table["phase"], profile_table["profile"]
     model_init, model_fit = fit_crab_profile(phases, profile)
+
     empty_template_table = Table()
     empty_template_table.meta.update(profile_table.meta)
     output_template_table = fill_template_table(
-        model_fit, nbins=nbins, template_table=empty_template_table
+        model_fit,
+        nbins=nbins,
+        template_table=empty_template_table,
+        model_init=model_init,
     )
 
     if plot:

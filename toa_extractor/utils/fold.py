@@ -3,6 +3,7 @@ import numpy as np
 from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
 from scipy.interpolate import interp1d
 from astropy.table import Table
+from stingray.utils import histogram2d
 
 ONE_SIXTH = 1 / 6
 
@@ -66,6 +67,25 @@ def calculate_profile(phase, nbin=512, expo=None):
     )
     if expo is not None:
         t["expo"] = expo
+
+    return t
+
+
+def calculate_dyn_profile(time, phase, nbin=512, ntimebin=10, expo=None):
+    time = time.astype(float)
+    ranges = [[time.min(), time.max()], [0, 1]]
+    prof = histogram2d(
+        time,
+        phase.astype(float),
+        bins=(ntimebin, nbin),
+        range=ranges,
+    )
+
+    t = Table({"profile": prof})
+    if expo is not None:
+        t.meta["expo"] = expo
+    t.meta["time"] = np.linspace(*ranges[0], ntimebin + 1)[:-1]
+    t.meta["phase"] = np.linspace(*ranges[1], nbin + 1)[:-1]
 
     return t
 
@@ -162,13 +182,5 @@ def get_phase_func_from_ephemeris_file(
         ephem=ephem,
         return_sec_from_mjdstart=return_sec_from_mjdstart,
     )
-    # import matplotlib.pyplot as plt
 
-    # print(times.shape, phases.shape)
-    # plt.figure()
-    # polyfit = np.poly1d(np.polyfit(times.astype(float), phases.astype(float), 2))
-
-    # plt.scatter(times, phases - polyfit(times.astype(float)))
-    # plt.plot(times, phases - polyfit(times.astype(float)))
-    # plt.show()
     return interp1d(times, phases, fill_value="extrapolate")
