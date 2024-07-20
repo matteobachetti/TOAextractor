@@ -38,16 +38,21 @@ def plot_complete_diagnostics(
 
     n_phas_rows = len(phaseogram_files)
 
-    profile = 0.0
     phaseograms = []
     for phaseogram in phaseogram_files:
         phaseograms.append(Table.read(phaseogram))
 
     phases = phaseograms[0].meta["phase"]
-
+    profile = 0.0
+    profile_raw = 0.0
     for phaseogram_table in phaseograms:
         phaseogram = phaseogram_table["profile"]
-        profile += np.sum(phaseogram, axis=0)
+        local_profile = np.sum(phaseogram, axis=0)
+        profile_raw += local_profile
+        if "expo" in phaseogram_table.meta:
+            expo = phaseogram_table.meta["expo"]
+            local_profile = local_profile / expo
+        profile += local_profile
 
     if phase_max is None:
         phase_max = 0
@@ -55,6 +60,8 @@ def plot_complete_diagnostics(
     if np.min(phases) >= 0 and np.max(phases) <= 1:
         phases = np.concatenate([phases - 1, phases, phases + 1])
         profile = np.concatenate([profile, profile, profile])
+        if profile_raw is not None:
+            profile_raw = np.concatenate([profile_raw, profile_raw, profile_raw])
 
     fig = plt.figure(figsize=(10, 3 + 3 * n_phas_rows), layout="constrained")
     # External GridSpec
@@ -113,6 +120,7 @@ def plot_complete_diagnostics(
             axres,
             model_init=model_init,
             phase_max=phase_max,
+            profile_raw=profile_raw,
         )
 
     for ax in axes_full_profile:

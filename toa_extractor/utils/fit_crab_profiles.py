@@ -11,11 +11,24 @@ from toa_extractor.utils import root_name
 
 
 def _plot_profile_and_fit(
-    phases, profile, model_fit, axfit, axres, model_init=None, phase_max=None
+    phases,
+    profile,
+    model_fit,
+    axfit,
+    axres,
+    model_init=None,
+    phase_max=None,
+    profile_raw=None,
 ):
     residuals = profile - model_fit(phases)
 
-    axfit.plot(phases, profile, ds="steps-mid", color="r", label="Data")
+    label = "Data"
+    if profile_raw is not None:
+        axfit.plot(
+            phases, profile_raw, ds="steps-mid", color="r", alpha=0.5, label="Data"
+        )
+        label = "Deadtime-corrected Data"
+    axfit.plot(phases, profile, ds="steps-mid", color="r", label=label)
 
     if model_init is not None:
         axfit.plot(
