@@ -205,6 +205,17 @@ class TOAPipeline(luigi.Task):
         residual_dict["fit_residual_err"] = (
             profile_fit_table.meta["phase_max_err"] / profile_fit_table.meta["F0"]
         )
+        if "profile_0" in profile_fit_table.colnames:
+            for col in profile_fit_table.colnames:
+                if not col.startswith("profile_") or "raw" in col:
+                    continue
+                meta = profile_fit_table[col].meta
+                residual_dict[col + "_phase_max"] = meta["phase_max"]
+                residual_dict[col + "_phase_max_err"] = meta["phase_max_err"]
+                residual_dict[col + "_fit_residual"] = meta["phase_max"] / meta["F0"]
+                residual_dict[col + "_fit_residual_err"] = (
+                    meta["phase_max_err"] / profile_fit_table.meta["F0"]
+                )
 
         residual_dict["img"] = encode_image_file(image_file)
 

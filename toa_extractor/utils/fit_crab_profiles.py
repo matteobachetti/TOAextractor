@@ -339,7 +339,7 @@ def get_initial_parameters(input_phases, profile):
     return init_pars
 
 
-def fit_crab_profile(phases, profile, fitter=None):
+def fit_crab_profile(phases, profile, fitter=None, init_pars=None):
     """Fit a Crab profile with a mixture of symmetric and asymmetric Lorentzians
 
     Parameters
@@ -353,6 +353,8 @@ def fit_crab_profile(phases, profile, fitter=None):
     ----------------
     fitter : astropy.modeling.fitting.Fitter
         The fitter to use (default is :class:`astropy.modeling.fitting.TRFLSQFitter`)
+    init_pars: dict
+        The initial model parameters to use for the fit. If None, a default model is used
 
     Returns
     -------
@@ -363,7 +365,8 @@ def fit_crab_profile(phases, profile, fitter=None):
     """
     if fitter is None:
         fitter = TRFLSQFitter(calc_uncertainties=True)
-    init_pars = get_initial_parameters(phases, profile)
+    if init_pars is None:
+        init_pars = get_initial_parameters(phases, profile)
     model_init = default_crab_model(init_pars=init_pars)
     model_fit = fitter(model_init, phases, profile, maxiter=200)
     return model_init, model_fit
@@ -464,6 +467,35 @@ def plot_fit_diagnostics(
         plt.show()
 
 
+def fit_and_save_single_profile(
+    phases,
+    profile,
+    nbins=512,
+    additional_meta=None,
+    plot=False,
+    plot_file=None,
+    init_pars=None,
+):
+    model_init, model_fit = fit_crab_profile(phases, profile, init_pars=init_pars)
+    output_table = fill_template_table(model_fit, nbins=nbins, model_init=model_init)
+    phase_max = None
+    if additional_meta is not None:
+        output_table.meta.update(additional_meta)
+
+    phase_max = output_table.meta["phase_max"]
+
+    if plot:
+        plot_fit_diagnostics(
+            phases,
+            profile,
+            model_fit,
+            phase_max=phase_max,
+            model_init=model_init,
+            plot_file=plot_file,
+        )
+    return output_table
+
+
 def create_template_from_profile_table(
     input_profile_fname,
     output_template_fname=None,
@@ -473,26 +505,41 @@ def create_template_from_profile_table(
 ):
     profile_table = Table.read(input_profile_fname)
     phases, profile = profile_table["phase"], profile_table["profile"]
-    model_init, model_fit = fit_crab_profile(phases, profile)
 
-    empty_template_table = Table()
-    empty_template_table.meta.update(profile_table.meta)
-    output_template_table = fill_template_table(
-        model_fit,
+    output_template_table = fit_and_save_single_profile(
+        phases,
+        profile,
         nbins=nbins,
-        template_table=empty_template_table,
-        model_init=model_init,
+        additional_meta=profile_table.meta,
+        plot=plot,
+        plot_file=plot_file,
     )
 
-    if plot:
-        plot_fit_diagnostics(
+    if not "profile_0" in profile_table.colnames:
+        if output_template_fname is not None:
+            output_template_table.write(
+                output_template_fname, overwrite=True, serialize_meta=True
+            )
+        return output_template_table
+
+    for col in profile_table.colnames:
+        if not col.startswith("profile_") or "raw" in col:
+            continue
+        phases, profile = profile_table["phase"], profile_table[col]
+
+        init_pars = copy.deepcopy(output_template_table.meta["best_fit"])
+        init_pars["amplitude_0"] *= profile.sum() / profile_table["profile"].sum()
+
+        output_table = fit_and_save_single_profile(
             phases,
             profile,
-            model_fit,
-            phase_max=output_template_table.meta["phase_max"],
-            model_init=model_init,
-            plot_file=plot_file,
+            nbins=nbins,
+            additional_meta=profile_table.meta,
+            init_pars=init_pars,
         )
+        output_template_table[col] = output_table["profile"]
+        output_template_table[col].meta.update(output_table.meta)
+
     if output_template_fname is not None:
         output_template_table.write(
             output_template_fname, overwrite=True, serialize_meta=True
