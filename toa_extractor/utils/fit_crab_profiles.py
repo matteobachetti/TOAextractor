@@ -543,7 +543,7 @@ def create_template_from_profile_table(
         plot_file=plot_file,
     )
 
-    if not "profile_0" in profile_table.colnames:
+    if "profile_0" not in profile_table.colnames:
         if output_template_fname is not None:
             output_template_table.write(
                 output_template_fname, overwrite=True, serialize_meta=True
