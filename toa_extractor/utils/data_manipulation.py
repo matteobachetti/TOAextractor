@@ -359,12 +359,14 @@ def get_observing_info(evfile, hduname=1):
         header = hdu.header
 
         if "EXPOSURE" in header:
-            ctrate = header["NAXIS2"] / header["EXPOSURE"]
-        else:
-            # Need better estimate
-            ctrate = header["NAXIS2"] / (header["TSTOP"] - header["TSTART"])
+            exposure = header["EXPOSURE"]
+        elif "TSTOP" in header and "TSTART" in header:
+            exposure = header["TSTOP"] - header["TSTART"]
+
+        ctrate = header["NAXIS2"] / exposure
 
         info["fname"] = os.path.abspath(evfile)
+        info["nphots"] = header["NAXIS2"]
         info["obsid"] = safe_get_key(header, "OBS_ID", "")
         info["mission"] = mission
         info["instrument"] = instr
