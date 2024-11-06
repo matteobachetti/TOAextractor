@@ -13,7 +13,7 @@ from pulse_deadtime_fix.core import _create_weights
 
 import matplotlib.pyplot as plt
 
-from .utils import output_name, encode_image_file
+from .utils import output_name, encode_image_file, search_substring_in_list
 from .utils.data_manipulation import get_events_from_fits
 from .utils.config import load_yaml_file
 from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
@@ -151,6 +151,7 @@ def plot_complete_diagnostics(
     axes_zoom_peak2[0].legend()
     if output_fname is not None:
         plt.savefig(output_fname, dpi=150)
+        plt.close(fig)
     else:
         plt.show()
 
@@ -181,7 +182,7 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
-        image_file = (
+        image_files_list = (
             PlotDiagnostics(
                 self.fname, self.config_file, self.version, self.worker_timeout
             )
@@ -195,6 +196,10 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
+        image_files = list(
+            filter(None, open(image_files_list, "r").read().splitlines())
+        )
+        image_file = image_files[0]
 
         residual_dict = load_yaml_file(residual_file)
         profile_fit_table = Table.read(profile_fit_file)
@@ -216,6 +221,7 @@ class TOAPipeline(luigi.Task):
             for col in profile_fit_table.colnames:
                 if not col.startswith("profile_") or "raw" in col:
                     continue
+                label = col.replace("profile", "")
                 meta = profile_fit_table[col].meta
                 local_residual_dict = copy.deepcopy(residual_dict)
                 local_residual_dict.update(meta)
@@ -223,9 +229,11 @@ class TOAPipeline(luigi.Task):
                 local_residual_dict["fit_residual_err"] = (
                     meta["phase_max_err"] / meta["F0"]
                 )
-                outfile = self.output().path.replace(
-                    ".txt", f"{col.replace('profile', '')}.yaml"
-                )
+                local_image_file = search_substring_in_list(
+                    label + ".jpg", image_files
+                )[0]
+                local_residual_dict["img"] = encode_image_file(local_image_file)
+                outfile = self.output().path.replace(".txt", f"{label}.yaml")
 
                 with open(outfile, "w") as f:
                     yaml.dump(local_residual_dict, f)
@@ -263,7 +271,7 @@ class PlotDiagnostics(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_diagnostics.jpg")
+            output_name(self.fname, self.version, "_diagnostics.txt")
         )
 
     def run(self):
@@ -289,12 +297,45 @@ class PlotDiagnostics(luigi.Task):
         )
         phaseograms = open(phaseogram_file).read().splitlines()
 
+        root = self.output().path.replace(".txt", "")
+        outfile = root + ".jpg"
         plot_complete_diagnostics(
             phaseograms,
             model_fit=best_fit_model,
             model_init=init_model,
-            output_fname=self.output().path,
+            output_fname=outfile,
         )
+        outfiles = [outfile]
+        if "profile_1" in profile_fit_table.colnames:
+            for col in profile_fit_table.colnames:
+                if not col.startswith("profile_") or "raw" in col:
+                    continue
+
+                label = col.replace("profile", "")
+
+                init_model = default_crab_model(
+                    init_pars=profile_fit_table[col].meta["model_init"]
+                )
+                best_fit_model = default_crab_model(
+                    init_pars=profile_fit_table[col].meta["best_fit"]
+                )
+                local_phaseograms = search_substring_in_list(
+                    label + ".hdf5",
+                    phaseograms,
+                )
+
+                outfile = root + label + ".jpg"
+                plot_complete_diagnostics(
+                    local_phaseograms,
+                    model_fit=best_fit_model,
+                    model_init=init_model,
+                    output_fname=outfile,
+                )
+                outfiles.append(outfile)
+
+        with open(self.output().path, "w") as f:
+            for outfile in outfiles:
+                print(outfile, file=f)
 
 
 class GetResidual(luigi.Task):

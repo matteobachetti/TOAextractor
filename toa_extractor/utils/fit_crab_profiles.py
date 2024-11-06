@@ -405,9 +405,12 @@ def fill_template_table(model_fit, nbins=512, template_table=None, model_init=No
     par_err = [model_fit.cov_matrix.cov_matrix[i, i] ** 0.5 for i in range(len(par))]
 
     template_table.meta["best_fit"] = {}
-    for name, p, pe in zip(free_par_names, par, par_err):
+    for name, p in zip(model_fit.param_names, model_fit.parameters):
         template_table.meta["best_fit"][name] = p
+
+    for name, pe in zip(free_par_names, par_err):
         template_table.meta["best_fit"][name + "_err"] = pe
+
     if model_init is not None:
         par = model_init.parameters
         template_table.meta["model_init"] = {}
@@ -498,7 +501,7 @@ def fit_and_save_single_profile(
             for key in init_pars.keys()
             if key not in ["amplitude_0", "amplitude_1", "x00_2"]
         ]
-    print("Frozen", frozen)
+
     model_init, model_fit = fit_crab_profile(
         phases, profile, init_pars=init_pars, frozen=frozen
     )
