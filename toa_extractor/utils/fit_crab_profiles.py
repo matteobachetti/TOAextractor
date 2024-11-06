@@ -539,6 +539,7 @@ def create_template_from_profile_table(
         )
         output_template_table[col] = output_table["profile"]
         output_template_table[col].meta.update(output_table.meta)
+        output_template_table[col].meta.update(profile_table[col].meta)
 
     if output_template_fname is not None:
         output_template_table.write(

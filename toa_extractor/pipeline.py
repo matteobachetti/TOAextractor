@@ -460,6 +460,7 @@ class GetFoldedProfile(luigi.Task):
             if "phase" not in result_table.colnames:
                 result_table["phase"] = table["phase"]
                 result_table.meta["F0"] = model.F0.value
+
             result_table[f"profile_{i}"] = table["profile"]
             result_table[f"profile_raw_{i}"] = table["profile_raw"]
 
@@ -474,7 +475,7 @@ class GetFoldedProfile(luigi.Task):
             [result_table[f"profile_raw_{i}"] for i in range(len(parfiles))], axis=0
         )
 
-        result_table.write(self.output().path)
+        result_table.write(self.output().path, serialize_meta=True)
 
 
 def get_outputs(task):
