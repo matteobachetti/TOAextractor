@@ -191,6 +191,9 @@ class GetPhaseogram(luigi.Task):
             result_table.meta["F1"] = model.F1.value
             result_table.meta["F2"] = model.F2.value
             result_table.meta["mjdref"] = events.mjdref
+            result_table.meta["MJDSTART"] = mjdstart
+            result_table.meta["MJDSTOP"] = mjdstop
+
             new_file_name = output_name(
                 self.fname, self.version, f"_dynprof_{i:000d}.hdf5"
             )

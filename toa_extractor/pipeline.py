@@ -1,4 +1,6 @@
+import copy
 import numpy as np
+
 import luigi
 import yaml
 from astropy import log
@@ -171,7 +173,7 @@ class TOAPipeline(luigi.Task):
         )
 
     def output(self):
-        return luigi.LocalTarget(output_name(self.fname, self.version, "_results.yaml"))
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_results.txt"))
 
     def run(self):
         residual_file = (
@@ -205,22 +207,38 @@ class TOAPipeline(luigi.Task):
         residual_dict["fit_residual_err"] = (
             profile_fit_table.meta["phase_max_err"] / profile_fit_table.meta["F0"]
         )
-        if "profile_0" in profile_fit_table.colnames:
+
+        outfile = self.output().path.replace(".txt", ".yaml")
+
+        output_files = [outfile]
+
+        if "profile_1" in profile_fit_table.colnames:
             for col in profile_fit_table.colnames:
                 if not col.startswith("profile_") or "raw" in col:
                     continue
                 meta = profile_fit_table[col].meta
-                residual_dict[col + "_phase_max"] = meta["phase_max"]
-                residual_dict[col + "_phase_max_err"] = meta["phase_max_err"]
-                residual_dict[col + "_fit_residual"] = meta["phase_max"] / meta["F0"]
-                residual_dict[col + "_fit_residual_err"] = (
-                    meta["phase_max_err"] / profile_fit_table.meta["F0"]
+                local_residual_dict = copy.deepcopy(residual_dict)
+                local_residual_dict.update(meta)
+                local_residual_dict["fit_residual"] = meta["phase_max"] / meta["F0"]
+                local_residual_dict["fit_residual_err"] = (
+                    meta["phase_max_err"] / meta["F0"]
+                )
+                outfile = self.output().path.replace(
+                    ".txt", f"{col.replace('profile', '')}.yaml"
                 )
 
+                with open(outfile, "w") as f:
+                    yaml.dump(local_residual_dict, f)
+
+                output_files.append(outfile)
+
         residual_dict["img"] = encode_image_file(image_file)
+        with open(outfile, "w") as f:
+            yaml.dump(residual_dict, f)
 
         with open(self.output().path, "w") as f:
-            yaml.dump(residual_dict, f)
+            for outfile in output_files:
+                print(outfile, file=f)
 
 
 class PlotDiagnostics(luigi.Task):
@@ -460,6 +478,8 @@ class GetFoldedProfile(luigi.Task):
             if "phase" not in result_table.colnames:
                 result_table["phase"] = table["phase"]
                 result_table.meta["F0"] = model.F0.value
+                result_table.meta["F1"] = model.F1.value
+                result_table.meta["F2"] = model.F2.value
 
             result_table[f"profile_{i}"] = table["profile"]
             result_table[f"profile_raw_{i}"] = table["profile_raw"]
@@ -467,6 +487,9 @@ class GetFoldedProfile(luigi.Task):
             result_table[f"profile_{i}"].meta["F0"] = model.F0.value
             result_table[f"profile_{i}"].meta["F1"] = model.F1.value
             result_table[f"profile_{i}"].meta["F2"] = model.F2.value
+            result_table[f"profile_{i}"].meta["mjdstart"] = mjdstart
+            result_table[f"profile_{i}"].meta["mjdstop"] = mjdstop
+            result_table[f"profile_{i}"].meta["mjd"] = model.PEPOCH.value
 
         result_table["profile"] = np.sum(
             [result_table[f"profile_{i}"] for i in range(len(parfiles))], axis=0

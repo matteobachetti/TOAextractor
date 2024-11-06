@@ -213,7 +213,7 @@ def full_crab_profile_model(
 FullCrab = custom_model(full_crab_profile_model)
 
 
-def default_crab_model(init_pars=None):
+def default_crab_model(init_pars=None, frozen=None):
     """Default model for the Crab
 
     The model consists of an external normalization parameter, a DC level,
@@ -245,6 +245,8 @@ def default_crab_model(init_pars=None):
         + ``fwhm11_2``: The right FWHM of the secondary peak's asymmetric Lorentzian
         + ``fwhm21_2``: The left FWHM of the secondary peak's asymmetric Lorentzian
 
+    frozen: list, default None
+        list of frozen parameters
     """
     bounds_fullcrab = dict(
         [
@@ -260,7 +262,7 @@ def default_crab_model(init_pars=None):
     bounds_fullcrab["peak_separation"] = (
         0.35,
         0.45,
-    )  # Account for the possibility of misingerpreting the first peak
+    )  # Account for the possibility of misinterpreting the first peak
 
     model_init = Const1D(bounds={"amplitude": (0, np.inf)}) * (
         Const1D(bounds={"amplitude": (0, np.inf)}) + FullCrab(bounds=bounds_fullcrab)
@@ -268,6 +270,12 @@ def default_crab_model(init_pars=None):
     if init_pars is not None:
         for key, val in init_pars.items():
             setattr(model_init, key, val)
+
+    if frozen is not None:
+        for key in frozen:
+            if key in model_init.param_names:
+                print("Freezing", key)
+                getattr(model_init, key).fixed = True
     return model_init
 
 
@@ -339,7 +347,7 @@ def get_initial_parameters(input_phases, profile):
     return init_pars
 
 
-def fit_crab_profile(phases, profile, fitter=None, init_pars=None):
+def fit_crab_profile(phases, profile, fitter=None, init_pars=None, frozen=None):
     """Fit a Crab profile with a mixture of symmetric and asymmetric Lorentzians
 
     Parameters
@@ -355,6 +363,8 @@ def fit_crab_profile(phases, profile, fitter=None, init_pars=None):
         The fitter to use (default is :class:`astropy.modeling.fitting.TRFLSQFitter`)
     init_pars: dict
         The initial model parameters to use for the fit. If None, a default model is used
+    frozen: list
+        List of parameters to freeze
 
     Returns
     -------
@@ -367,7 +377,8 @@ def fit_crab_profile(phases, profile, fitter=None, init_pars=None):
         fitter = TRFLSQFitter(calc_uncertainties=True)
     if init_pars is None:
         init_pars = get_initial_parameters(phases, profile)
-    model_init = default_crab_model(init_pars=init_pars)
+    model_init = default_crab_model(init_pars=init_pars, frozen=frozen)
+
     model_fit = fitter(model_init, phases, profile, maxiter=200)
     return model_init, model_fit
 
@@ -386,12 +397,15 @@ def fill_template_table(model_fit, nbins=512, template_table=None, model_init=No
     template_table["profile"] = factor * renorm_model(phases + phase_max)
     template_table["profile_raw"] = model_fit(phases)
 
-    par, par_err = model_fit.parameters, [
-        model_fit.cov_matrix.cov_matrix[i, i] ** 0.5
-        for i in range(len(model_fit.parameters))
+    free_par_names = [
+        par for par in model_fit.param_names if not getattr(model_fit, par).fixed
     ]
+
+    par = [getattr(model_fit, par).value for par in free_par_names]
+    par_err = [model_fit.cov_matrix.cov_matrix[i, i] ** 0.5 for i in range(len(par))]
+
     template_table.meta["best_fit"] = {}
-    for name, p, pe in zip(model_fit.param_names, par, par_err):
+    for name, p, pe in zip(free_par_names, par, par_err):
         template_table.meta["best_fit"][name] = p
         template_table.meta["best_fit"][name + "_err"] = pe
     if model_init is not None:
@@ -475,8 +489,19 @@ def fit_and_save_single_profile(
     plot=False,
     plot_file=None,
     init_pars=None,
+    freeze_most=False,
 ):
-    model_init, model_fit = fit_crab_profile(phases, profile, init_pars=init_pars)
+    frozen = None
+    if freeze_most:
+        frozen = [
+            key
+            for key in init_pars.keys()
+            if key not in ["amplitude_0", "amplitude_1", "x00_2"]
+        ]
+    print("Frozen", frozen)
+    model_init, model_fit = fit_crab_profile(
+        phases, profile, init_pars=init_pars, frozen=frozen
+    )
     output_table = fill_template_table(model_fit, nbins=nbins, model_init=model_init)
     phase_max = None
     if additional_meta is not None:
@@ -529,6 +554,7 @@ def create_template_from_profile_table(
 
         init_pars = copy.deepcopy(output_template_table.meta["best_fit"])
         init_pars["amplitude_0"] *= profile.sum() / profile_table["profile"].sum()
+        init_pars["amplitude_1"] *= profile.sum() / profile_table["profile"].sum()
 
         output_table = fit_and_save_single_profile(
             phases,
@@ -536,6 +562,7 @@ def create_template_from_profile_table(
             nbins=nbins,
             additional_meta=profile_table.meta,
             init_pars=init_pars,
+            freeze_most=True,
         )
         output_template_table[col] = output_table["profile"]
         output_template_table[col].meta.update(output_table.meta)
