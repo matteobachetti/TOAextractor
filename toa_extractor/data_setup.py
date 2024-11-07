@@ -145,6 +145,8 @@ class GetPhaseogram(luigi.Task):
         edge_idxs = np.searchsorted(mjds, mjd_edges)
         output_files = []
 
+        print(mjdstart, mjdstop, mjd_edges)
+        print(parfiles)
         for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
             if edge_idxs[i] >= events.time.size:
                 warnings.warn("No events in this interval")
@@ -378,7 +380,9 @@ class GetParfile(luigi.Task):
 
         if model1.PEPOCH.value != model2.PEPOCH.value:
             warnings.warn(f"Different models for start and stop of {self.fname}")
-            n_months = np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int)
+            n_months = max(
+                np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int), 2
+            )
             models = [
                 get_crab_ephemeris(mjd, ephem=ephem, force_parameters=force_parameters)
                 for mjd in np.linspace(info["mjdstart"], info["mjdstop"], n_months)
