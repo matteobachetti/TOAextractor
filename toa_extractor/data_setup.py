@@ -378,7 +378,7 @@ class GetParfile(luigi.Task):
 
         if model1.PEPOCH.value != model2.PEPOCH.value:
             warnings.warn(f"Different models for start and stop of {self.fname}")
-            n_months = np.rint((info["mjdstop"] - info["mjdstart"]) / 30)
+            n_months = np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int)
             models = [
                 get_crab_ephemeris(mjd, ephem=ephem, force_parameters=force_parameters)
                 for mjd in np.linspace(info["mjdstart"], info["mjdstop"], n_months)
