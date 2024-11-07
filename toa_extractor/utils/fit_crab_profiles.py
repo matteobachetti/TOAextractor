@@ -550,6 +550,9 @@ def create_template_from_profile_table(
             )
         return output_template_table
 
+    # Freeze most parameters in sub-intervals, but only if the observation
+    # is divided in more than 3 sub-intervals.
+    freeze_most = "profile_3" in profile_table.colnames
     for col in profile_table.colnames:
         if not col.startswith("profile_") or "raw" in col:
             continue
@@ -565,7 +568,7 @@ def create_template_from_profile_table(
             nbins=nbins,
             additional_meta=profile_table.meta,
             init_pars=init_pars,
-            freeze_most=True,
+            freeze_most=freeze_most,
         )
         output_template_table[col] = output_table["profile"]
         output_template_table[col].meta.update(output_table.meta)
