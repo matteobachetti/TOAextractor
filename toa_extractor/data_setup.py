@@ -378,20 +378,23 @@ class GetParfile(luigi.Task):
 
         if model1.PEPOCH.value != model2.PEPOCH.value:
             warnings.warn(f"Different models for start and stop of {self.fname}")
+            n_months = np.rint((info["mjdstop"] - info["mjdstart"]) / 30)
             models = [
                 get_crab_ephemeris(mjd, ephem=ephem, force_parameters=force_parameters)
-                for mjd in np.arange(info["mjdstart"], info["mjdstop"], 30)
+                for mjd in np.linspace(info["mjdstart"], info["mjdstop"], n_months)
             ]
             fname_root = fname.replace(".txt", "")
-            current_pepoch = models[1].PEPOCH.value
+            current_pepoch = -1.0
             parfiles = []
-            for i, m in enumerate(models):
+            count = 0
+            for m in models:
                 local_pepoch = m.PEPOCH.value
                 if local_pepoch != current_pepoch:
-                    new_parfile = fname_root + f"_{i:03d}.par"
+                    new_parfile = fname_root + f"_{count:03d}.par"
                     m.write_parfile(new_parfile)
                     parfiles.append(new_parfile)
                     current_pepoch = local_pepoch
+                    count += 1
         else:
             fname1 = fname.replace(".txt", ".par")
             model1.write_parfile(fname1, include_info=False)
