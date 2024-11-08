@@ -8,6 +8,9 @@ from astropy import units as u
 from astropy.table import vstack, Table
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
+from stingray.gti import cross_two_gtis, split_gtis_by_exposure
+from stingray.io import FITSTimeseriesReader
+from stingray import EventList
 
 from stingray.pulse.pulsar import get_model
 from hendrics.efsearch import (
@@ -25,6 +28,59 @@ from .utils.data_manipulation import get_observing_info
 from .utils.data_manipulation import get_events_from_fits
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 from pulse_deadtime_fix.core import _create_weights
+
+
+def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):
+    """Split gtis with various criteria.
+
+    Examples
+    --------
+    >>> gti = np.array([[0, 10], [20, 30]])
+    >>> times = [5, 25]
+    >>> res = split_gtis_at_times_and_exposure(gti, times)
+    >>> assert np.allclose(res[0], np.array([[0, 5]]))
+    >>> assert np.allclose(res[1], np.array([[5, 10], [20, 25]]))
+    >>> assert np.allclose(res[2], np.array([[25, 30]]))
+    >>> res = split_gtis_at_times_and_exposure(gti, [10], max_exposure=5)
+    >>> assert np.allclose(res[0], np.array([[0, 5]]))
+    >>> assert np.allclose(res[1], np.array([[5, 10]]))
+    >>> assert np.allclose(res[2], np.array([[20, 25]]))
+    >>> assert np.allclose(res[3], np.array([[25, 30]]))
+    """
+    duration = np.sum(gti[:, 1] - gti[:, 0])
+    print(times, max_exposure, gti)
+    print(times - gti[0, 0], max_exposure, gti - gti[0, 0])
+
+    if duration < max_exposure and len(times) == 0:
+        return [gti]
+
+    if len(times) == 0:
+        split_gtis = [gti]
+    elif times[0] > gti[0, 0] and times[-1] < gti[-1, 1]:
+        edges = np.concatenate([[gti[0, 0]], times, [gti[-1, 1]]])
+
+        time_intervals = list(zip(edges[:-1], edges[1:]))
+
+        split_gtis = [cross_two_gtis(gti, [t_int]) for t_int in time_intervals]
+    elif times[0] < gti[0, 0]:
+        raise ValueError("First time is smaller than the first GTI")
+    elif times[1] > gti[-1, 1]:
+        raise ValueError("Last time is larger than the last GTI")
+
+    if duration < max_exposure:
+        return split_gtis
+
+    # Otherwise, further split the observation
+
+    new_split_gtis = []
+    for gti in split_gtis:
+        local_duration = np.sum(gti[:, 1] - gti[:, 0])
+        if local_duration > max_exposure:
+            new_split_gtis.extend(split_gtis_by_exposure(gti, max_exposure))
+        else:
+            new_split_gtis.append(gti)
+
+    return new_split_gtis
 
 
 def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_window=None):
@@ -116,9 +172,8 @@ class GetPhaseogram(luigi.Task):
             .output()
             .path
         )
-
         info = load_yaml_file(infofile)
-        events = get_events_from_fits(self.fname)
+
         ephem = info["ephem"]
         mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
         parfile_list = (
@@ -133,35 +188,58 @@ class GetPhaseogram(luigi.Task):
         )
         # Read list of file ignoring blank lines
         parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
-        models = [get_model(p) for p in parfiles]
-        epochs = np.asarray([m.PEPOCH.value for m in models])
-        mjd_edges = [mjdstart, mjdstop]
-        if len(set(epochs)) > 1:
-            additional_mjd_edges = (epochs[1:] + epochs[:-1]) / 2
-            mjd_edges = np.concatenate([[mjdstart], additional_mjd_edges, [mjdstop]])
+        model_epochs = np.asarray([get_model(p).PEPOCH.value for p in parfiles])
 
-        mjds = events.time / 86400 + events.mjdref
+        # Sort parfiles based on model_epochs
+        sorted_indices = np.argsort(model_epochs)
+        parfiles = [parfiles[i] for i in sorted_indices]
+        model_epochs = model_epochs[sorted_indices]
+
+        fitsreader = FITSTimeseriesReader(
+            self.fname, output_class=EventList, additional_columns=["PRIOR"]
+        )
+        model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
+        current_gtis = fitsreader.gti
+
+        split_at_edges = []
+        if len(set(model_epochs_met)) > 1:
+            split_at_edges = (model_epochs_met[1:] + model_epochs_met[:-1]) / 2
+
+        nphotons = fitsreader.nphot
+        # If nphotons is too high, further split the intervals
+        photon_max = 5_000_000  # soft upper limit
+        max_exposure = np.inf
+        if nphotons > photon_max * 1.5:
+            max_exposure = fitsreader.exposure * photon_max / nphotons
+
+        split_gti = split_gtis_at_times_and_exposure(
+            current_gtis,
+            split_at_edges,
+            max_exposure=max_exposure,
+        )
+
         nbin = 512
-        edge_idxs = np.searchsorted(mjds, mjd_edges)
         output_files = []
 
-        print(mjdstart, mjdstop, mjd_edges)
-        print(parfiles)
-        for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
-            if edge_idxs[i] >= events.time.size:
-                warnings.warn("No events in this interval")
-                continue
+        for subprofile_count, events in enumerate(
+            fitsreader.apply_gti_lists(split_gti)
+        ):
+            mjdstart = events.gti[0, 0] / 86400 + events.mjdref
+            mjdstop = events.gti[-1, 1] / 86400 + events.mjdref
+            mean_met = (events.gti[0, 0] + events.gti[-1, 1]) / 2
+            parfile = parfiles[np.argmin(np.abs(model_epochs_met - mean_met))]
+
+            log.info(f"Using {parfile} for {mjdstart} - {mjdstop}")
 
             correction_fun = get_phase_func_from_ephemeris_file(
                 mjdstart,
                 mjdstop,
-                parfiles[i],
+                parfile,
                 ephem=ephem,
                 return_sec_from_mjdstart=True,
             )
 
-            good = slice(edge_idxs[i], edge_idxs[i + 1])
-            times_from_mjdstart = events.time[good] - (mjdstart - events.mjdref) * 86400
+            times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
             phase = correction_fun(times_from_mjdstart)
 
             tot_phots = times_from_mjdstart.size
@@ -173,7 +251,7 @@ class GetPhaseogram(luigi.Task):
                 np.any(events.prior != 0) or np.any(np.isnan(events.prior))
             ):
                 phases_livetime_start = correction_fun(
-                    times_from_mjdstart - events.prior[good]
+                    times_from_mjdstart - events.prior
                 )
                 phase_edges = np.linspace(0, 1, nbin + 1)
                 weights = _create_weights(
@@ -185,19 +263,19 @@ class GetPhaseogram(luigi.Task):
 
             phase -= np.floor(phase)
 
-            model = get_model(parfiles[i])
+            model = get_model(parfile)
             result_table = calculate_dyn_profile(
-                events.time[good], phase, nbin=nbin, ntimebin=ntimebin, expo=expo
+                events.time, phase, nbin=nbin, ntimebin=ntimebin, expo=expo
             )
             result_table.meta["F0"] = model.F0.value
             result_table.meta["F1"] = model.F1.value
             result_table.meta["F2"] = model.F2.value
             result_table.meta["mjdref"] = events.mjdref
-            result_table.meta["MJDSTART"] = mjdstart
-            result_table.meta["MJDSTOP"] = mjdstop
+            result_table.meta["mjdstart"] = mjdstart
+            result_table.meta["mjdstop"] = mjdstop
 
             new_file_name = output_name(
-                self.fname, self.version, f"_dynprof_{i:000d}.hdf5"
+                self.fname, self.version, f"_dynprof_{subprofile_count:000d}.hdf5"
             )
             result_table.write(new_file_name, overwrite=True, serialize_meta=True)
             output_files.append(new_file_name)

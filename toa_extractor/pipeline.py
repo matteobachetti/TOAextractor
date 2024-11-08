@@ -8,7 +8,6 @@ from astropy.table import Table
 
 from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit, normalized_template
-from stingray.gti import cross_two_gtis, split_gtis_by_exposure
 from stingray.io import FITSTimeseriesReader
 from stingray import EventList
 
@@ -33,60 +32,8 @@ from .data_setup import (
     GetPhaseogram,
     _plot_phaseogram,
     _get_and_normalize_phaseogram,
+    split_gtis_at_times_and_exposure,
 )
-
-
-def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):
-    """Split gtis with various criteria.
-
-    Examples
-    --------
-    >>> gti = np.array([[0, 10], [20, 30]])
-    >>> times = [5, 25]
-    >>> res = split_gtis_at_times_and_exposure(gti, times)
-    >>> assert np.allclose(res[0], np.array([[0, 5]]))
-    >>> assert np.allclose(res[1], np.array([[5, 10], [20, 25]]))
-    >>> assert np.allclose(res[2], np.array([[25, 30]]))
-    >>> res = split_gtis_at_times_and_exposure(gti, [10], max_exposure=5)
-    >>> assert np.allclose(res[0], np.array([[0, 5]]))
-    >>> assert np.allclose(res[1], np.array([[5, 10]]))
-    >>> assert np.allclose(res[2], np.array([[20, 25]]))
-    >>> assert np.allclose(res[3], np.array([[25, 30]]))
-    """
-    duration = np.sum(gti[:, 1] - gti[:, 0])
-    print(times, max_exposure, gti)
-    print(times - gti[0, 0], max_exposure, gti - gti[0, 0])
-
-    if duration < max_exposure and len(times) == 0:
-        return [gti]
-
-    if len(times) == 0:
-        split_gtis = [gti]
-    elif times[0] > gti[0, 0] and times[-1] < gti[-1, 1]:
-        edges = np.concatenate([[gti[0, 0]], times, [gti[-1, 1]]])
-
-        time_intervals = list(zip(edges[:-1], edges[1:]))
-
-        split_gtis = [cross_two_gtis(gti, [t_int]) for t_int in time_intervals]
-    elif times[0] < gti[0, 0]:
-        raise ValueError("First time is smaller than the first GTI")
-    elif times[1] > gti[-1, 1]:
-        raise ValueError("Last time is larger than the last GTI")
-
-    if duration < max_exposure:
-        return split_gtis
-
-    # Otherwise, further split the observation
-
-    new_split_gtis = []
-    for gti in split_gtis:
-        local_duration = np.sum(gti[:, 1] - gti[:, 0])
-        if local_duration > max_exposure:
-            new_split_gtis.extend(split_gtis_by_exposure(gti, max_exposure))
-        else:
-            new_split_gtis.append(gti)
-
-    return new_split_gtis
 
 
 def plot_complete_diagnostics(
@@ -496,10 +443,7 @@ class GetFoldedProfile(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetParfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetTemplate(
+        yield GetPhaseogram(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
 
@@ -507,115 +451,45 @@ class GetFoldedProfile(luigi.Task):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_folded.hdf5"))
 
     def run(self):
-        infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
-        )
-        info = load_yaml_file(infofile)
-
-        ephem = info["ephem"]
-        mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
-        parfile_list = (
-            GetParfile(
-                self.fname,
-                self.config_file,
-                self.version,
-                worker_timeout=self.worker_timeout,
+        phaseogram_file = (
+            GetPhaseogram(
+                self.fname, self.config_file, self.version, self.worker_timeout
             )
             .output()
             .path
         )
-        # Read list of file ignoring blank lines
-        parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
-        model_epochs = np.asarray([get_model(p).PEPOCH.value for p in parfiles])
+        phaseogram_files = open(phaseogram_file).read().splitlines()
 
-        # Sort parfiles based on model_epochs
-        sorted_indices = np.argsort(model_epochs)
-        parfiles = [parfiles[i] for i in sorted_indices]
-        model_epochs = model_epochs[sorted_indices]
+        phaseograms = []
+        for phaseogram in phaseogram_files:
+            phaseograms.append(Table.read(phaseogram))
 
-        fitsreader = FITSTimeseriesReader(
-            self.fname, output_class=EventList, additional_columns=["PRIOR"]
-        )
-        model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
-        current_gtis = fitsreader.gti
+        phases = phaseograms[0].meta["phase"]
+        profile = 0.0
+        profile_raw = 0.0
 
-        split_at_edges = []
-        if len(set(model_epochs_met)) > 1:
-            split_at_edges = (model_epochs_met[1:] + model_epochs_met[:-1]) / 2
-
-        nphotons = fitsreader.nphot
-        # If nphotons is too high, further split the intervals
-        photon_max = 5_000_000  # soft upper limit
-        max_exposure = np.inf
-        if nphotons > photon_max * 1.5:
-            max_exposure = fitsreader.exposure * photon_max / nphotons
-
-        split_gti = split_gtis_at_times_and_exposure(
-            current_gtis,
-            split_at_edges,
-            max_exposure=max_exposure,
-        )
-
-        nbin = 512
         result_table = Table()
+        for subprofile_count, phaseogram_table in enumerate(phaseograms):
+            phaseogram = phaseogram_table["profile"]
+            local_profile_raw = np.sum(phaseogram, axis=0)
+            profile_raw += local_profile_raw
+            if "expo" in phaseogram_table.meta:
+                expo = phaseogram_table.meta["expo"]
+                local_profile = local_profile_raw / expo
+            else:
+                local_profile = local_profile_raw
 
-        for subprofile_count, events in enumerate(
-            fitsreader.apply_gti_lists(split_gti)
-        ):
-            mjdstart = events.gti[0, 0] / 86400 + events.mjdref
-            mjdstop = events.gti[-1, 1] / 86400 + events.mjdref
-            mean_met = (events.gti[0, 0] + events.gti[-1, 1]) / 2
-            parfile = parfiles[np.argmin(np.abs(model_epochs_met - mean_met))]
+            if "phase" not in result_table.colnames:
+                result_table["phase"] = phases
+                result_table.meta.update(phaseogram_table.meta)
 
-            log.info(f"Using {parfile} for {mjdstart} - {mjdstop}")
-
-            correction_fun = get_phase_func_from_ephemeris_file(
-                mjdstart,
-                mjdstop,
-                parfile,
-                ephem=ephem,
-                return_sec_from_mjdstart=True,
+            result_table[f"profile_{subprofile_count}"] = local_profile
+            result_table[f"profile_raw_{subprofile_count}"] = local_profile_raw
+            result_table[f"profile_raw_{subprofile_count}"].meta.update(
+                phaseogram_table.meta
             )
 
-            times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
-            phase = correction_fun(times_from_mjdstart)
-
-            expo = None
-            if hasattr(events, "prior") and (
-                np.any(events.prior != 0) or np.any(np.isnan(events.prior))
-            ):
-                phases_livetime_start = correction_fun(
-                    times_from_mjdstart - events.prior
-                )
-                phase_edges = np.linspace(0, 1, nbin + 1)
-                weights = _create_weights(
-                    phases_livetime_start.astype(float),
-                    phase.astype(float),
-                    phase_edges,
-                )
-                expo = 1 / weights
-
-            phase -= np.floor(phase)
-
-            model = get_model(parfile)
-            table = calculate_profile(phase, nbin=nbin, expo=expo)
-            if "phase" not in result_table.colnames:
-                result_table["phase"] = table["phase"]
-                result_table.meta["F0"] = model.F0.value
-                result_table.meta["F1"] = model.F1.value
-                result_table.meta["F2"] = model.F2.value
-
-            result_table[f"profile_{subprofile_count}"] = table["profile"]
-            result_table[f"profile_raw_{subprofile_count}"] = table["profile_raw"]
-
-            result_table[f"profile_{subprofile_count}"].meta["F0"] = model.F0.value
-            result_table[f"profile_{subprofile_count}"].meta["F1"] = model.F1.value
-            result_table[f"profile_{subprofile_count}"].meta["F2"] = model.F2.value
-            result_table[f"profile_{subprofile_count}"].meta["mjdstart"] = mjdstart
-            result_table[f"profile_{subprofile_count}"].meta["mjdstop"] = mjdstop
-            result_table[f"profile_{subprofile_count}"].meta["mjd"] = model.PEPOCH.value
+            profile += local_profile
 
         if subprofile_count == 0:
             log.info("Only one profile found in the observation")
@@ -623,13 +497,154 @@ class GetFoldedProfile(luigi.Task):
         else:
             log.info("Creating summed profile")
             result_table["profile"] = np.sum(
-                [result_table[f"profile_{i}"] for i in range(len(parfiles))], axis=0
+                [result_table[f"profile_{i}"] for i in range(len(phaseograms))], axis=0
             )
             result_table["profile_raw"] = np.sum(
-                [result_table[f"profile_raw_{i}"] for i in range(len(parfiles))], axis=0
+                [result_table[f"profile_raw_{i}"] for i in range(len(phaseograms))],
+                axis=0,
             )
 
         result_table.write(self.output().path, serialize_meta=True)
+
+
+# class GetFoldedProfile(luigi.Task):
+#     fname = luigi.Parameter()
+#     config_file = luigi.Parameter()
+#     version = luigi.Parameter(default="none")
+#     worker_timeout = luigi.IntParameter(default=600)
+
+#     def requires(self):
+#         yield GetParfile(
+#             self.fname, self.config_file, self.version, self.worker_timeout
+#         )
+
+#     def output(self):
+#         return luigi.LocalTarget(output_name(self.fname, self.version, "_folded.hdf5"))
+
+#     def run(self):
+#         infofile = (
+#             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
+#             .output()
+#             .path
+#         )
+#         info = load_yaml_file(infofile)
+
+#         ephem = info["ephem"]
+#         mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
+#         parfile_list = (
+#             GetParfile(
+#                 self.fname,
+#                 self.config_file,
+#                 self.version,
+#                 worker_timeout=self.worker_timeout,
+#             )
+#             .output()
+#             .path
+#         )
+#         # Read list of file ignoring blank lines
+#         parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
+#         model_epochs = np.asarray([get_model(p).PEPOCH.value for p in parfiles])
+
+#         # Sort parfiles based on model_epochs
+#         sorted_indices = np.argsort(model_epochs)
+#         parfiles = [parfiles[i] for i in sorted_indices]
+#         model_epochs = model_epochs[sorted_indices]
+
+#         fitsreader = FITSTimeseriesReader(
+#             self.fname, output_class=EventList, additional_columns=["PRIOR"]
+#         )
+#         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
+#         current_gtis = fitsreader.gti
+
+#         split_at_edges = []
+#         if len(set(model_epochs_met)) > 1:
+#             split_at_edges = (model_epochs_met[1:] + model_epochs_met[:-1]) / 2
+
+#         nphotons = fitsreader.nphot
+#         # If nphotons is too high, further split the intervals
+#         photon_max = 5_000_000  # soft upper limit
+#         max_exposure = np.inf
+#         if nphotons > photon_max * 1.5:
+#             max_exposure = fitsreader.exposure * photon_max / nphotons
+
+#         split_gti = split_gtis_at_times_and_exposure(
+#             current_gtis,
+#             split_at_edges,
+#             max_exposure=max_exposure,
+#         )
+
+#         nbin = 512
+#         result_table = Table()
+
+#         for subprofile_count, events in enumerate(
+#             fitsreader.apply_gti_lists(split_gti)
+#         ):
+#             mjdstart = events.gti[0, 0] / 86400 + events.mjdref
+#             mjdstop = events.gti[-1, 1] / 86400 + events.mjdref
+#             mean_met = (events.gti[0, 0] + events.gti[-1, 1]) / 2
+#             parfile = parfiles[np.argmin(np.abs(model_epochs_met - mean_met))]
+
+#             log.info(f"Using {parfile} for {mjdstart} - {mjdstop}")
+
+#             correction_fun = get_phase_func_from_ephemeris_file(
+#                 mjdstart,
+#                 mjdstop,
+#                 parfile,
+#                 ephem=ephem,
+#                 return_sec_from_mjdstart=True,
+#             )
+
+#             times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
+#             phase = correction_fun(times_from_mjdstart)
+
+#             expo = None
+#             if hasattr(events, "prior") and (
+#                 np.any(events.prior != 0) or np.any(np.isnan(events.prior))
+#             ):
+#                 phases_livetime_start = correction_fun(
+#                     times_from_mjdstart - events.prior
+#                 )
+#                 phase_edges = np.linspace(0, 1, nbin + 1)
+#                 weights = _create_weights(
+#                     phases_livetime_start.astype(float),
+#                     phase.astype(float),
+#                     phase_edges,
+#                 )
+#                 expo = 1 / weights
+
+#             phase -= np.floor(phase)
+
+#             model = get_model(parfile)
+#             table = calculate_profile(phase, nbin=nbin, expo=expo)
+#             if "phase" not in result_table.colnames:
+#                 result_table["phase"] = table["phase"]
+#                 result_table.meta["F0"] = model.F0.value
+#                 result_table.meta["F1"] = model.F1.value
+#                 result_table.meta["F2"] = model.F2.value
+
+#             result_table[f"profile_{subprofile_count}"] = table["profile"]
+#             result_table[f"profile_raw_{subprofile_count}"] = table["profile_raw"]
+
+#             result_table[f"profile_{subprofile_count}"].meta["F0"] = model.F0.value
+#             result_table[f"profile_{subprofile_count}"].meta["F1"] = model.F1.value
+#             result_table[f"profile_{subprofile_count}"].meta["F2"] = model.F2.value
+#             result_table[f"profile_{subprofile_count}"].meta["mjdstart"] = mjdstart
+#             result_table[f"profile_{subprofile_count}"].meta["mjdstop"] = mjdstop
+#             result_table[f"profile_{subprofile_count}"].meta["mjd"] = model.PEPOCH.value
+
+#         if subprofile_count == 0:
+#             log.info("Only one profile found in the observation")
+#             result_table.rename_column("profile_0", "profile")
+#         else:
+#             log.info("Creating summed profile")
+#             result_table["profile"] = np.sum(
+#                 [result_table[f"profile_{i}"] for i in range(len(parfiles))], axis=0
+#             )
+#             result_table["profile_raw"] = np.sum(
+#                 [result_table[f"profile_raw_{i}"] for i in range(len(parfiles))], axis=0
+#             )
+
+#         result_table.write(self.output().path, serialize_meta=True)
 
 
 def get_outputs(task):

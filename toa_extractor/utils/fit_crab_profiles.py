@@ -2,6 +2,7 @@ import copy
 import numpy as np
 from scipy.optimize import fmin
 
+from astropy import log
 
 from astropy.modeling.models import custom_model, Const1D
 from astropy.modeling.fitting import TRFLSQFitter
@@ -544,11 +545,14 @@ def create_template_from_profile_table(
     )
 
     if "profile_1" not in profile_table.colnames:
+        log.info("Single peak profile, nothing else to do")
         if output_template_fname is not None:
             output_template_table.write(
                 output_template_fname, overwrite=True, serialize_meta=True
             )
         return output_template_table
+
+    log.info("Fitting subpeaks")
 
     # Freeze most parameters in sub-intervals, but only if the observation
     # is divided in more than 3 sub-intervals.
@@ -560,7 +564,6 @@ def create_template_from_profile_table(
 
         init_pars = copy.deepcopy(output_template_table.meta["best_fit"])
         init_pars["amplitude_0"] *= profile.sum() / profile_table["profile"].sum()
-        init_pars["amplitude_1"] *= profile.sum() / profile_table["profile"].sum()
 
         output_table = fit_and_save_single_profile(
             phases,
