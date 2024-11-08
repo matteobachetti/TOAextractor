@@ -1,19 +1,19 @@
 import os
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+from astropy import units as u
 from astropy.table import Table
-from bokeh.plotting import figure, output_file, show, save
-from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation, BoxAnnotation
-from bokeh.models import CDSView, GroupFilter
-
-from bokeh.transform import factor_cmap, factor_mark
+from bokeh.models import (BoxAnnotation, CDSView, ColumnDataSource,
+                          GroupFilter, PolyAnnotation, Whisker)
 from bokeh.palettes import Category20b_20
+from bokeh.plotting import figure, output_file, save, show
+from bokeh.transform import factor_cmap, factor_mark
+from uncertainties import ufloat
 
+from .utils import root_name
 # from bokeh.layouts import column
 from .utils.crab import retrieve_cgro_ephemeris
-from .utils import root_name
-from astropy import units as u
-from uncertainties import ufloat
 
 curdir = os.path.dirname(__file__)
 datadir = os.path.join(curdir, "data")

@@ -1,13 +1,13 @@
 import copy
+
+import matplotlib.pyplot as plt
 import numpy as np
+from astropy import log
+from astropy.modeling.fitting import TRFLSQFitter
+from astropy.modeling.models import Const1D, custom_model
+from astropy.table import Table
 from scipy.optimize import fmin
 
-from astropy import log
-
-from astropy.modeling.models import custom_model, Const1D
-from astropy.modeling.fitting import TRFLSQFitter
-from astropy.table import Table
-import matplotlib.pyplot as plt
 from toa_extractor.utils import root_name
 
 

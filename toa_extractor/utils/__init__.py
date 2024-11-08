@@ -2,9 +2,10 @@
 
 # This sub-module is destined for common non-package specific utility
 # functions.
-import io
 import base64
+import io
 import os
+
 from PIL import Image
 
 

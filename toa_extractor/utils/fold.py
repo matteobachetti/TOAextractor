@@ -1,8 +1,8 @@
-from numba import njit
 import numpy as np
-from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
-from scipy.interpolate import interp1d
 from astropy.table import Table
+from numba import njit
+from scipy.interpolate import interp1d
+from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
 from stingray.utils import histogram2d
 
 ONE_SIXTH = 1 / 6

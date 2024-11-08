@@ -1,13 +1,12 @@
 import copy
-import pytest
-import numpy as np
-from toa_extractor.utils.fit_crab_profiles import (
-    default_crab_model,
-    fit_crab_profile,
-    fill_template_table,
-    normalize_phase_0d5,
-)
 
+import numpy as np
+import pytest
+
+from toa_extractor.utils.fit_crab_profiles import (default_crab_model,
+                                                   fill_template_table,
+                                                   fit_crab_profile,
+                                                   normalize_phase_0d5)
 
 # From true stories...
 ugly_profile_pars = {

@@ -1,33 +1,29 @@
 import shutil
 import warnings
+
 import luigi
-import yaml
+import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 from astropy import log
 from astropy import units as u
-from astropy.table import vstack, Table
-import matplotlib.pyplot as plt
+from astropy.table import Table, vstack
+from hendrics.efsearch import (EFPeriodogram, _analyze_qffa_results,
+                               pf_upper_limit, search_with_qffa)
+from pulse_deadtime_fix.core import _create_weights
 from scipy.signal import savgol_filter
+from stingray import EventList
 from stingray.gti import cross_two_gtis, split_gtis_by_exposure
 from stingray.io import FITSTimeseriesReader
-from stingray import EventList
-
 from stingray.pulse.pulsar import get_model
-from hendrics.efsearch import (
-    search_with_qffa,
-    EFPeriodogram,
-    pf_upper_limit,
-    _analyze_qffa_results,
-)
 
+from .utils import output_name
+from .utils.config import get_template, load_yaml_file
 # from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris
-from .utils.config import get_template, load_yaml_file
-from .utils import output_name
-from .utils.data_manipulation import get_observing_info
-from .utils.data_manipulation import get_events_from_fits
-from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
-from pulse_deadtime_fix.core import _create_weights
+from .utils.data_manipulation import get_events_from_fits, get_observing_info
+from .utils.fold import (calculate_dyn_profile,
+                         get_phase_func_from_ephemeris_file)
 
 
 def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):

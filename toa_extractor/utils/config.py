@@ -1,9 +1,9 @@
 import os
-
-from astropy import log
-import yaml
-from yaml import load, Loader
 from functools import lru_cache
+
+import yaml
+from astropy import log
+from yaml import Loader, load
 
 NOT_AVLB = "N/A"
 

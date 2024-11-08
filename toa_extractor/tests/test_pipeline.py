@@ -1,12 +1,13 @@
-import os
 import glob
-import pytest
+import os
+
 import numpy as np
+import pytest
+
 from toa_extractor.pipeline import GetResidual, get_outputs
 from toa_extractor.pipeline import main as main_pipe
-from toa_extractor.summary import main as main_summary
 from toa_extractor.plotting import main as main_plotting
-
+from toa_extractor.summary import main as main_summary
 
 version_label = f"test_{np.random.randint(0, 1000000)}"
 

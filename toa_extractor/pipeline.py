@@ -1,38 +1,26 @@
 import copy
-import numpy as np
 
 import luigi
+import matplotlib.pyplot as plt
+import numpy as np
 import yaml
 from astropy import log
 from astropy.table import Table
-
-from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit, normalized_template
-from stingray.io import FITSTimeseriesReader
-from stingray import EventList
 
-from pulse_deadtime_fix.core import _create_weights
-
-import matplotlib.pyplot as plt
-
-from .utils import output_name, encode_image_file, search_substring_in_list
-from .utils.data_manipulation import get_events_from_fits
-from .utils.config import load_yaml_file
-from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
-from .utils.fit_crab_profiles import (
-    create_template_from_profile_table,
-    _plot_profile_and_fit,
-    default_crab_model,
-)
 from .data_setup import (
     GetInfo,
-    GetParfile,
-    GetTemplate,
-    # GetPulseFreq,
     GetPhaseogram,
-    _plot_phaseogram,
+    GetTemplate,
     _get_and_normalize_phaseogram,
-    split_gtis_at_times_and_exposure,
+    _plot_phaseogram,
+)
+from .utils import encode_image_file, output_name, search_substring_in_list
+from .utils.config import load_yaml_file
+from .utils.fit_crab_profiles import (
+    _plot_profile_and_fit,
+    create_template_from_profile_table,
+    default_crab_model,
 )
 
 
