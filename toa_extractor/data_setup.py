@@ -48,8 +48,6 @@ def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):
     >>> assert np.allclose(res[3], np.array([[25, 30]]))
     """
     duration = np.sum(gti[:, 1] - gti[:, 0])
-    print(times, max_exposure, gti)
-    print(times - gti[0, 0], max_exposure, gti - gti[0, 0])
 
     if duration < max_exposure and len(times) == 0:
         return [gti]
