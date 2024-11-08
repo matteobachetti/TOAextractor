@@ -485,7 +485,7 @@ class GetFoldedProfile(luigi.Task):
 
             result_table[f"profile_{subprofile_count}"] = local_profile
             result_table[f"profile_raw_{subprofile_count}"] = local_profile_raw
-            result_table[f"profile_raw_{subprofile_count}"].meta.update(
+            result_table[f"profile_{subprofile_count}"].meta.update(
                 phaseogram_table.meta
             )
 
