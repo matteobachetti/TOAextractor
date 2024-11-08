@@ -5,8 +5,11 @@ import numpy as np
 from astropy import log
 from astropy.io import fits
 from stingray import EventList
-from stingray.io import (get_key_from_mission_info,
-                         high_precision_keyword_read, read_mission_info)
+from stingray.io import (
+    get_key_from_mission_info,
+    high_precision_keyword_read,
+    read_mission_info,
+)
 
 from . import safe_get_key
 
@@ -138,10 +141,15 @@ def load_events_and_gtis(
             Chandra's instruments)
     """
     from astropy.io import fits as pf
-    from stingray.io import (AstropyUserWarning, EventReadOutput,
-                             _get_additional_data, get_gti_from_all_extensions,
-                             load_gtis, order_list_of_arrays,
-                             rough_calibration)
+    from stingray.io import (
+        AstropyUserWarning,
+        EventReadOutput,
+        _get_additional_data,
+        get_gti_from_all_extensions,
+        load_gtis,
+        order_list_of_arrays,
+        rough_calibration,
+    )
 
     hdulist = pf.open(fits_file)
     probe_header = hdulist[0].header

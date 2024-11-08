@@ -39,6 +39,5 @@ class TestPipeline(object):
 
     @classmethod
     def teardown_class(cls):
-
         for product in glob.glob(os.path.join(cls.datadir, "*_test_test_[0-9]*")):
             os.unlink(product)

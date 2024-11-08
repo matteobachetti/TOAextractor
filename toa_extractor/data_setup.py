@@ -8,8 +8,12 @@ import yaml
 from astropy import log
 from astropy import units as u
 from astropy.table import Table, vstack
-from hendrics.efsearch import (EFPeriodogram, _analyze_qffa_results,
-                               pf_upper_limit, search_with_qffa)
+from hendrics.efsearch import (
+    EFPeriodogram,
+    _analyze_qffa_results,
+    pf_upper_limit,
+    search_with_qffa,
+)
 from pulse_deadtime_fix.core import _create_weights
 from scipy.signal import savgol_filter
 from stingray import EventList
@@ -19,11 +23,11 @@ from stingray.pulse.pulsar import get_model
 
 from .utils import output_name
 from .utils.config import get_template, load_yaml_file
+
 # from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris
 from .utils.data_manipulation import get_events_from_fits, get_observing_info
-from .utils.fold import (calculate_dyn_profile,
-                         get_phase_func_from_ephemeris_file)
+from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 
 
 def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):
@@ -78,7 +82,6 @@ def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):
 
 
 def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_window=None):
-
     table = Table.read(phaseogram_file)
     normalized_phaseogram = (table["profile"].T).astype(float)
 

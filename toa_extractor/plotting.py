@@ -4,14 +4,21 @@ import numpy as np
 import pandas as pd
 from astropy import units as u
 from astropy.table import Table
-from bokeh.models import (BoxAnnotation, CDSView, ColumnDataSource,
-                          GroupFilter, PolyAnnotation, Whisker)
+from bokeh.models import (
+    BoxAnnotation,
+    CDSView,
+    ColumnDataSource,
+    GroupFilter,
+    PolyAnnotation,
+    Whisker,
+)
 from bokeh.palettes import Category20b_20
 from bokeh.plotting import figure, output_file, save, show
 from bokeh.transform import factor_cmap, factor_mark
 from uncertainties import ufloat
 
 from .utils import root_name
+
 # from bokeh.layouts import column
 from .utils.crab import retrieve_cgro_ephemeris
 
@@ -20,7 +27,6 @@ datadir = os.path.join(curdir, "data")
 
 
 def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual"):
-
     df = pd.read_csv(fname)
 
     # # ---- Frequency residuals ----
@@ -92,7 +98,6 @@ def plot_frequency_history(
     res_label="Residuals",
     **figure_kwargs,
 ):
-
     df = full_dataset.to_df()
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
     all_missions = sorted(list(set(df["mission"])))

@@ -19,8 +19,7 @@ if astropy_version < "3.0":
     ASTROPY_HEADER = True
 else:
     try:
-        from pytest_astropy_header.display import (PYTEST_HEADER_MODULES,
-                                                   TESTED_VERSIONS)
+        from pytest_astropy_header.display import PYTEST_HEADER_MODULES, TESTED_VERSIONS
 
         ASTROPY_HEADER = True
     except ImportError:
@@ -36,7 +35,6 @@ def pytest_configure(config):
 
     """
     if ASTROPY_HEADER:
-
         config.option.astropy_header = True
 
         # Customize the following lines to add/remove entries from the list of

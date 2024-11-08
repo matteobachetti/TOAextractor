@@ -3,10 +3,12 @@ import copy
 import numpy as np
 import pytest
 
-from toa_extractor.utils.fit_crab_profiles import (default_crab_model,
-                                                   fill_template_table,
-                                                   fit_crab_profile,
-                                                   normalize_phase_0d5)
+from toa_extractor.utils.fit_crab_profiles import (
+    default_crab_model,
+    fill_template_table,
+    fit_crab_profile,
+    normalize_phase_0d5,
+)
 
 # From true stories...
 ugly_profile_pars = {
@@ -97,13 +99,11 @@ def _simulate_and_fit(pars, nbin):
 
 
 class TestFit:
-
     @pytest.mark.parametrize("amplitude0", [100, 100000])
     @pytest.mark.parametrize("amplitude1", [0, 4])
     @pytest.mark.parametrize("x0_start", np.arange(0, 1, 1 / 3))
     @pytest.mark.parametrize("nbin", [64, 512])
     def test_ugly_fit(self, amplitude0, amplitude1, x0_start, nbin):
-
         pars = copy.deepcopy(ugly_profile_pars)
         pars["amplitude_0"] = amplitude0
         pars["amplitude_1"] = amplitude1
@@ -115,7 +115,6 @@ class TestFit:
     @pytest.mark.parametrize("x0_start", np.arange(0, 1, 1 / 3))
     @pytest.mark.parametrize("nbin", [64, 512])
     def test_good_fit(self, amplitude0, amplitude1, x0_start, nbin):
-
         pars = copy.deepcopy(good_profile_pars)
         pars["amplitude_0"] = amplitude0
         pars["amplitude_1"] = amplitude1
