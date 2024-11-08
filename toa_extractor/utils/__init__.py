@@ -92,9 +92,10 @@ def output_name(filename, version, suffix):
 def encode_image_file(image_file):
     foo = Image.open(image_file)
     # Get image file
-    image_file = open(image_file, "rb")
-
-    foo.thumbnail((576, 192), Image.LANCZOS)
+    # image_file = open(image_file, "rb")
+    width, height = foo.size
+    h_w_ratio = height / width
+    foo.thumbnail((576, int(576 * h_w_ratio)), Image.LANCZOS)
 
     # From https://stackoverflow.com/questions/42503995/
     # how-to-get-a-pil-image-as-a-base64-encoded-string
