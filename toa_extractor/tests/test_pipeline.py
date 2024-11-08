@@ -1,10 +1,14 @@
 import os
 import glob
 import pytest
+import numpy as np
 from toa_extractor.pipeline import GetResidual, get_outputs
 from toa_extractor.pipeline import main as main_pipe
 from toa_extractor.summary import main as main_summary
 from toa_extractor.plotting import main as main_plotting
+
+
+version_label = f"test_{np.random.randint(0, 1000000)}"
 
 
 class TestPipeline(object):
@@ -20,16 +24,20 @@ class TestPipeline(object):
             for ext in [".evt", ".fits", ".ds"]:
                 if ext not in f:
                     continue
-                main_pipe([f])
-                outputs = get_outputs(GetResidual(f, "none"))
+                main_pipe([f, "--version", version_label])
+                outputs = get_outputs(GetResidual(f, "none", version=version_label))
+                print(outputs)
                 for outf in outputs:
                     assert os.path.exists(outf)
 
-        main_summary(glob.glob(os.path.join(self.datadir, "*results.yaml")))
-        main_plotting(["summary.csv", "--test"])
+        main_summary(
+            glob.glob(os.path.join(self.datadir, f"*{version_label}*results*.yaml"))
+            + ["--output", f"summary_{version_label}.csv"]
+        )
+        main_plotting([f"summary_{version_label}.csv", "--test"])
 
     @classmethod
     def teardown_class(cls):
 
-        for product in glob.glob(os.path.join(cls.datadir, "*_none*")):
+        for product in glob.glob(os.path.join(cls.datadir, f"*_test_test_[0-9]*")):
             os.unlink(product)

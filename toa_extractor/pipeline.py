@@ -549,6 +549,7 @@ def get_outputs(task):
     """Get all outputs from a given luigi task and his dependencies."""
     outputs = []
     local_require = task
+
     while 1:
         try:
             outputs.append(local_require.output().path)
