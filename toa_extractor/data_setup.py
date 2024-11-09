@@ -185,6 +185,9 @@ class GetPhaseogram(luigi.Task):
         )
         # Read list of file ignoring blank lines
         parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
+
+        log.info("Relevant parameter files: " + ",".join(parfiles))
+
         model_epochs = np.asarray([get_model(p).PEPOCH.value for p in parfiles])
 
         # Sort parfiles based on model_epochs
@@ -198,16 +201,23 @@ class GetPhaseogram(luigi.Task):
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
         current_gtis = fitsreader.gti
 
+        obs_will_be_split = False
         split_at_edges = []
         if len(set(model_epochs_met)) > 1:
             split_at_edges = (model_epochs_met[1:] + model_epochs_met[:-1]) / 2
+            obs_will_be_split = True
 
         nphotons = fitsreader.nphot
+        log.info(f"Number of photons in the observation: {nphotons}.")
         # If nphotons is too high, further split the intervals
         photon_max = 5_000_000  # soft upper limit
         max_exposure = np.inf
         if nphotons > photon_max * 1.5:
             max_exposure = fitsreader.exposure * photon_max / nphotons
+            obs_will_be_split = True
+
+        if obs_will_be_split:
+            log.info("Splitting observation into smaller intervals.")
 
         split_gti = split_gtis_at_times_and_exposure(
             current_gtis,
@@ -217,12 +227,21 @@ class GetPhaseogram(luigi.Task):
 
         nbin = 512
         output_files = []
+        previous_mjdstart = -1
+        previous_mjdstop = -1
 
         for subprofile_count, events in enumerate(
             fitsreader.apply_gti_lists(split_gti)
         ):
             mjdstart = events.gti[0, 0] / 86400 + events.mjdref
             mjdstop = events.gti[-1, 1] / 86400 + events.mjdref
+            if np.isclose(mjdstart, previous_mjdstart) and np.isclose(
+                mjdstop, previous_mjdstop
+            ):
+                continue
+            previous_mjdstart = mjdstart
+            previous_mjdstop = mjdstop
+
             mean_met = (events.gti[0, 0] + events.gti[-1, 1]) / 2
             parfile = parfiles[np.argmin(np.abs(model_epochs_met - mean_met))]
 
