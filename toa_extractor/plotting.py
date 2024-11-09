@@ -422,7 +422,7 @@ def main(args=None):
         dataset,
         glitch_data,
         width=1200,
-        height=400,
+        height=600,
         res_label=rf"$$\Delta{{\rm TOA}} ({time_units_str})$$",
     )
 
@@ -467,4 +467,7 @@ def main(args=None):
     output_file(args.output)
     save(p)
 
-    show(p)
+    try:
+        show(p)
+    except RuntimeError:
+        pass
