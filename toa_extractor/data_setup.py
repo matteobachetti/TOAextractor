@@ -236,7 +236,8 @@ class GetPhaseogram(luigi.Task):
             mjdstart = events.gti[0, 0] / 86400 + events.mjdref
             mjdstop = events.gti[-1, 1] / 86400 + events.mjdref
 
-            # This is only useful until https://github.com/StingraySoftware/stingray/pull/858 is merged
+            # This is only useful until
+            # https://github.com/StingraySoftware/stingray/pull/858 is merged
             if np.isclose(mjdstart, previous_mjdstart) and np.isclose(
                 mjdstop, previous_mjdstop
             ):
