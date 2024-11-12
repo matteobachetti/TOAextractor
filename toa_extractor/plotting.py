@@ -29,29 +29,6 @@ datadir = os.path.join(curdir, "data")
 def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual"):
     df = pd.read_csv(fname)
 
-    # # ---- Frequency residuals ----
-    # f_res_label = "delta_f"
-    # df[f_res_label] = df["local_best_freq"] - df["initial_freq_estimate"]
-    # df[f_res_label + "_err"] = (
-    #     np.abs(df["local_best_freq_err_n"]) + np.abs(df["local_best_freq_err_p"])
-    # ) / 2
-    # factor = ((1 * u.Hz) / (1 * u.Unit(freq_units))).to("").value
-    # for col in f_res_label, f_res_label + "_err":
-    #     diff_str = col.replace(f_res_label, "")
-    #     df[f_res_label + f"_{freq_units}" + diff_str] = df[col] * factor
-
-    # f_res_label = f_res_label + f"_{freq_units}"
-
-    # res_str = [
-    #     f"{ufloat(res, err):P} {freq_units}"
-    #     for res, err in zip(df[f_res_label], df[f_res_label + "_err"])
-    # ]
-    # df["delta_f"] = df[f_res_label]
-    # df["delta_f_str"] = res_str
-
-    # df["delta_f_upper"] = np.array(df[f_res_label] + df[f_res_label + "_err"])
-    # df["delta_f_lower"] = np.array(df[f_res_label] - df[f_res_label + "_err"])
-
     # ---- Time residuals ----
     factor = ((1 * u.s) / (1 * u.Unit(time_units))).to("").value
     for col in res_label, res_label + "_err":
@@ -133,7 +110,7 @@ def plot_frequency_history(
             fill_color="red",
             left=mjd - 0.5 * mjde,
             right=mjd + 0.5 * mjde,
-            fill_alpha=0.2,
+            fill_alpha=0.4,
             line_width=2,
             line_alpha=0.2,
             line_color="red",
