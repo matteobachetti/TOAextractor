@@ -376,7 +376,8 @@ def get_observing_info(evfile, hduname=1):
 
         ctrate = header["NAXIS2"] / exposure
 
-        info["fname"] = os.path.abspath(evfile)
+        info["path"] = os.path.abspath(os.path.dirname(evfile))
+        info["fname"] = os.path.basename(evfile)
         info["nphots"] = header["NAXIS2"]
         info["obsid"] = safe_get_key(header, "OBS_ID", "")
         info["mission"] = mission

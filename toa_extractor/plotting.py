@@ -236,6 +236,9 @@ def plot_residuals(
             <span>ObsID @obsid</span>
         </div>
         <div>
+            <span>@fname</span>
+        </div>
+        <div>
             <span style="font-size: 15px; color: #696;">@delta_t_str</span>
         </div>
     </div>
@@ -293,8 +296,10 @@ def plot_residuals(
         "diamond_dot",
         "dot",
     ]
-
-    markers = factor_mark("mission", MARKERS, factors=all_missions)
+    if len(mission_ephem_combs) < len(MARKERS):
+        markers = factor_mark("mission+ephem", MARKERS, factors=mission_ephem_combs)
+    else:
+        markers = factor_mark("mission", MARKERS, factors=all_missions)
     for m in mission_ephem_combs:
         group = GroupFilter(column_name="mission+ephem", group=m)
         # source = df
