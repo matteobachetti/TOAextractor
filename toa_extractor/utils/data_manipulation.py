@@ -395,9 +395,7 @@ def get_observing_info(evfile, hduname=1):
         info["tstart"] = float_if_not_none(safe_get_key(header, "TSTART", None))
         info["tstop"] = float_if_not_none(safe_get_key(header, "TSTOP", None))
         info["source"] = safe_get_key(header, "OBJECT", "")
-        info["ra"] = float_if_not_none(
-            val := safe_get_key(header, "RA_OBJ", None) if val is not None else None
-        )
+        info["ra"] = float_if_not_none(safe_get_key(header, "RA_OBJ", None))
         info["dec"] = float_if_not_none(safe_get_key(header, "DEC_OBJ", None))
         info["ra_bary"] = info["dec_bary"] = None
         if "RA_BARY" in header and "bary" in header.comments["RA_BARY"]:
