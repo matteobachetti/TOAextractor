@@ -376,6 +376,9 @@ def get_observing_info(evfile, hduname=1):
 
         ctrate = header["NAXIS2"] / exposure
 
+        def float_if_not_none(val):
+            return float(val) if val is not None else None
+
         info["path"] = os.path.abspath(os.path.dirname(evfile))
         info["fname"] = os.path.basename(evfile)
         info["nphots"] = header["NAXIS2"]
@@ -384,16 +387,18 @@ def get_observing_info(evfile, hduname=1):
         info["instrument"] = instr
         mjdref_highprec = high_precision_keyword_read(header, "MJDREF")
         info["mjdref_highprec"] = f"{mjdref_highprec:0.15f}"
-        info["mjdref"] = float(info["mjdref_highprec"])
+        info["mjdref"] = float_if_not_none(info["mjdref_highprec"])
         info["mode"] = mode
         info["ephem"] = safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip("JPL-").lower()
         info["timesys"] = safe_get_key(header, "TIMESYS", "TDB").strip().lower()
         info["timeref"] = safe_get_key(header, "TIMEREF", "SOLARSYSTEM").strip().lower()
-        info["tstart"] = float(safe_get_key(header, "TSTART", None))
-        info["tstop"] = float(safe_get_key(header, "TSTOP", None))
+        info["tstart"] = float_if_not_none(safe_get_key(header, "TSTART", None))
+        info["tstop"] = float_if_not_none(safe_get_key(header, "TSTOP", None))
         info["source"] = safe_get_key(header, "OBJECT", "")
-        info["ra"] = float(safe_get_key(header, "RA_OBJ", None))
-        info["dec"] = float(safe_get_key(header, "DEC_OBJ", None))
+        info["ra"] = float_if_not_none(
+            val := safe_get_key(header, "RA_OBJ", None) if val is not None else None
+        )
+        info["dec"] = float_if_not_none(safe_get_key(header, "DEC_OBJ", None))
         info["ra_bary"] = info["dec_bary"] = None
         if "RA_BARY" in header and "bary" in header.comments["RA_BARY"]:
             info["ra_bary"] = header["RA_BARY"]
@@ -401,10 +406,10 @@ def get_observing_info(evfile, hduname=1):
         elif "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"]:
             info["ra_bary"] = header["RA_OBJ"]
             info["dec_bary"] = header["DEC_OBJ"]
-        info["mjdstart"] = float(info["tstart"] / 86400 + mjdref_highprec)
-        info["mjdstop"] = float(info["tstop"] / 86400 + mjdref_highprec)
+        info["mjdstart"] = float_if_not_none(info["tstart"] / 86400 + mjdref_highprec)
+        info["mjdstop"] = float_if_not_none(info["tstop"] / 86400 + mjdref_highprec)
         MJD = float(info["mjdstart"] + info["mjdstop"]) / 2
         info["mjd"] = MJD
-        info["countrate"] = float(ctrate)
+        info["countrate"] = float_if_not_none(ctrate)
 
     return info
