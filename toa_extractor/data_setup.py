@@ -46,6 +46,8 @@ def hrc_true_rate(rate: float):
 
 _RATE_CORRECTION_FUNC = {
     "hrc": hrc_true_rate,
+    "hrc-s": hrc_true_rate,
+    "hrc-i": hrc_true_rate,
 }
 
 
@@ -305,6 +307,26 @@ class GetPhaseogram(luigi.Task):
             result_table = calculate_dyn_profile(
                 events.time, phase, nbin=nbin, ntimebin=ntimebin, expo=expo
             )
+            if events.instr is not None and events.instr.lower() in list(
+                _RATE_CORRECTION_FUNC.keys()
+            ):
+                log.info(f"Instrument: {events.instr}")
+                # HRC
+                log.info(f"Using {events.instr} rate correction")
+                tot_prof = np.sum(result_table["profile"], axis=0)
+                avg_rate = tot_prof * nbin / events.exposure
+                fold_correction_fun = _RATE_CORRECTION_FUNC[events.instr.lower()]
+                # avg_rate = np.mean(rate, axis=0)
+                from scipy.ndimage import gaussian_filter1d
+
+                avg_rate = gaussian_filter1d(avg_rate, 5, mode="wrap")
+                if np.any(avg_rate <= 0):
+                    warnings.warn("Rate is zero or negative")
+                    continue
+                expo = avg_rate / fold_correction_fun(avg_rate)
+
+                result_table.meta["expo"] = expo
+
             result_table.meta["F0"] = model.F0.value
             result_table.meta["F1"] = model.F1.value
             result_table.meta["F2"] = model.F2.value

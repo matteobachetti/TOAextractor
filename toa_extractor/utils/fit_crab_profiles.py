@@ -316,7 +316,11 @@ def get_initial_parameters(input_phases, profile):
 
     ph1 = phases[idx_1]
     baseline = np.min(profile)
+
     amplitude1 = profile[idx_1] - baseline
+    if baseline < 0:
+        amplitude1 += -baseline
+        baseline = 0
 
     fwhm1 = 0.03
     fwhm2 = 0.08
