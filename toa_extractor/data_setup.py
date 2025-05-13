@@ -293,7 +293,7 @@ class GetPhaseogram(luigi.Task):
                 # avg_rate = np.mean(rate, axis=0)
                 from scipy.ndimage import gaussian_filter1d
 
-                avg_rate = gaussian_filter1d(avg_rate, 5, mode="wrap")
+                avg_rate = gaussian_filter1d(avg_rate.astype(float), 5, mode="wrap")
                 if np.any(avg_rate <= 0):
                     warnings.warn("Rate is zero or negative")
                     continue
