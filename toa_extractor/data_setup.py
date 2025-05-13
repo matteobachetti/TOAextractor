@@ -30,6 +30,25 @@ from .utils.data_manipulation import get_events_from_fits, get_observing_info
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 
 
+def hrc_true_rate(rate: float):
+    if isinstance(rate, np.ndarray):
+        return np.asarray([hrc_true_rate(r) for r in rate])
+    if rate < 12:
+        return rate
+    if rate > 24:
+        warnings.warn("The rate is too high for HRC correction")
+    rate_lim = 2058.4 / 75.6
+    if rate > rate_lim:
+        rate = rate_lim
+    corr = 45.91 - (2058.4 - 75.6 * rate) ** 0.5
+    return corr
+
+
+_RATE_CORRECTION_FUNC = {
+    "hrc": hrc_true_rate,
+}
+
+
 def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):
     """Split gtis with various criteria.
 
