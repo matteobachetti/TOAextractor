@@ -329,25 +329,25 @@ def get_initial_parameters(input_phases, profile):
     prof_filt2 = copy.deepcopy(profile)
     prof_filt2[np.abs(phases + ph1 - 0.4) > 0.2] = 0
     idx_2 = np.argmax(prof_filt2)
-    amplitude2 = profile[idx_2] - baseline
+    amplitude2 = max(profile[idx_2] - baseline, 0)
 
     init_pars = {
-        "amplitude_0": amplitude1,
-        "amplitude_1": baseline / amplitude1,
-        "amplitude00_2": 0.75,
-        "amplitude10_2": 0.5,
-        "x00_2": ph1,
-        "dx00_2": 0,
-        "fwhm00_2": fwhm1,
-        "fwhm10_2": fwhm1 * 2,
-        "fwhm20_2": fwhm1 * 2,
-        "amplitude01_2": amplitude2 / amplitude1 / 10 * 6,
-        "amplitude11_2": amplitude2 / amplitude1 / 10 * 4,
-        "peak_separation": ph1 + 0.4,
-        "dx01_2": 0,
-        "fwhm01_2": fwhm2,
-        "fwhm11_2": fwhm2 * 2,
-        "fwhm21_2": fwhm2 * 2,
+        "amplitude_0": amplitude1,  # external normalization
+        "amplitude_1": baseline / amplitude1,  # DC level
+        "amplitude00_2": 0.75,  # main peak's sym Lor
+        "amplitude10_2": 0.5,  # main peak's asym Lor
+        "x00_2": ph1,  # phase of main peak's sym Lor
+        "dx00_2": -0.01,  # phase separation of main peak's asym Lor
+        "fwhm00_2": fwhm1,  # FWHM of main peak's sym Lor
+        "fwhm10_2": fwhm1 * 2,  # right FWHM of main peak's asym Lor
+        "fwhm20_2": fwhm1 * 2,  # left FWHM of main peak's asym Lor
+        "amplitude01_2": amplitude2 / amplitude1 / 10 * 6,  # ampl. of secondary peak's sym Lor
+        "amplitude11_2": amplitude2 / amplitude1 / 10 * 4,  # ampl. of secondary peak's asym Lor
+        "peak_separation": ph1 + 0.4,  # separation between the sym Lors of the two peaks
+        "dx01_2": 0.0,  # separation in phase of secondary peak's asym Lor
+        "fwhm01_2": fwhm2,  # FWHM of secondary peak's sym Lor
+        "fwhm11_2": fwhm2 * 2,  # right FWHM of secondary peak's asym Lor
+        "fwhm21_2": fwhm2 * 2,  # left FWHM of secondary peak's asym Lor
     }
     return init_pars
 
@@ -383,8 +383,33 @@ def fit_crab_profile(phases, profile, fitter=None, init_pars=None, frozen=None):
     if init_pars is None:
         init_pars = get_initial_parameters(phases, profile)
     model_init = default_crab_model(init_pars=init_pars, frozen=frozen)
+    log.info("Initial parameters:")
+    for par in model_init.param_names:
+        fixed_str = "fixed" if getattr(model_init, par).fixed else "free"
+        val = getattr(model_init, par).value
+        bounds = getattr(model_init, par).bounds
+        log.info(f"    {par}: {val:.2e} {fixed_str} {bounds}")
 
-    model_fit = fitter(model_init, phases, profile, maxiter=200)
+    model_fit = fitter(
+        model_init, phases, profile, maxiter=200, weights=1 / np.sqrt(profile), acc=0.001
+    )
+    log.info("Fit parameters:")
+    log.info(f"External normalization: {model_fit.amplitude_0.value:.2e}")
+    log.info(f"DC level: {model_fit.amplitude_1.value:.2e}")
+    log.info(f"    Main peak phase: {model_fit.x00_2.value:.2e}")
+    log.info(f"    Main peak sym. comp. amplitude: {model_fit.amplitude00_2.value:.2e}")
+    log.info(f"    Main peak sym. comp. FWHM: {model_fit.fwhm00_2.value:.2e}")
+    log.info(f"    Main peak comp. sep.: {model_fit.dx00_2.value:.2e}")
+    log.info(f"    Main peak asym comp. amplitude: {model_fit.amplitude10_2.value:.2e}")
+    log.info(f"    Main peak asym comp. FWHM (L): {model_fit.fwhm10_2.value:.2e}")
+    log.info(f"    Main peak asym comp. FWHM (R): {model_fit.fwhm20_2.value:.2e}")
+    log.info(f"    Peak separation: {model_fit.peak_separation_2.value:.2e}")
+    log.info(f"    Secondary peak sym comp. amplitude: {model_fit.amplitude01_2.value:.2e}")
+    log.info(f"    Secondary peak sym. comp. FWHM: {model_fit.fwhm01_2.value:.2e}")
+    log.info(f"    Secondary peak comp. sep.: {model_fit.dx01_2.value:.2e}")
+    log.info(f"    Secondary peak asym comp. amplitude: {model_fit.amplitude11_2.value:.2e}")
+    log.info(f"    Secondary peak asym comp. FWHM (L): {model_fit.fwhm11_2.value:.2e}")
+    log.info(f"    Secondary peak asym comp. FWHM (R): {model_fit.fwhm21_2.value:.2e}")
     return model_init, model_fit
 
 
