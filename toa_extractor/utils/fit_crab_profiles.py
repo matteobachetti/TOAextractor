@@ -1,4 +1,5 @@
 import copy
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -379,8 +380,17 @@ def fit_crab_profile(phases, profile, fitter=None, init_pars=None, frozen=None):
         bounds = getattr(model_init, par).bounds
         log.info(f"    {par}: {val:.2e} {fixed_str} {bounds}")
 
+    weights = None
+    if np.all(profile > 20):
+        weights = 1 / np.sqrt(profile)
+
     model_fit = fitter(
-        model_init, phases, profile, maxiter=200, weights=1 / np.sqrt(profile), acc=0.001
+        model_init,
+        phases,
+        profile,
+        maxiter=200,
+        weights=weights,
+        acc=0.001,
     )
     log.info("Fit parameters:")
     log.info(f"External normalization: {model_fit.amplitude_0.value:.2e}")
