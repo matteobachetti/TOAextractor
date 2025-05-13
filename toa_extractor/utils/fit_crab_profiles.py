@@ -25,19 +25,13 @@ def _plot_profile_and_fit(
 
     label = "Data"
     if profile_raw is not None:
-        axfit.plot(
-            phases, profile_raw, ds="steps-mid", color="r", alpha=0.5, label="Data"
-        )
+        axfit.plot(phases, profile_raw, ds="steps-mid", color="r", alpha=0.5, label="Data")
         label = "Deadtime-corrected Data"
     axfit.plot(phases, profile, ds="steps-mid", color="r", label=label)
 
     if model_init is not None:
-        axfit.plot(
-            phases, model_init(phases), color="grey", alpha=0.5, label="Init model"
-        )
-    axfit.plot(
-        phases, model_fit(phases), color="k", zorder=20, lw=1.5, label="Fit model"
-    )
+        axfit.plot(phases, model_init(phases), color="grey", alpha=0.5, label="Init model")
+    axfit.plot(phases, model_fit(phases), color="k", zorder=20, lw=1.5, label="Fit model")
 
     peak_colors = ["b", "navy"]
     m = model_fit[2]
@@ -160,9 +154,7 @@ def skewed_peak(x, amplitude0=1, amplitude1=1, x0=0, dx0=0, fwhm0=1, fwhm1=1, fw
     x = np.asanyarray(x)
 
     sym_lor = lorentzian(x, amplitude=amplitude0, x0=x0, fwhm=fwhm0)
-    asym_lor = asymmetric_lorentzian(
-        x, amplitude=amplitude1, x0=x0 + dx0, fwhm1=fwhm1, fwhm2=fwhm2
-    )
+    asym_lor = asymmetric_lorentzian(x, amplitude=amplitude1, x0=x0 + dx0, fwhm1=fwhm1, fwhm2=fwhm2)
 
     return sym_lor + asym_lor
 
@@ -207,8 +199,10 @@ def full_crab_profile_model(
         fwhm1=fwhm11,
         fwhm2=fwhm21,
     )
-
-    return peak1 + peak2
+    res = peak1 + peak2
+    # if amplitude10 > amplitude00:
+    #     res *= 0.0
+    return res
 
 
 FullCrab = custom_model(full_crab_profile_model)
@@ -250,10 +244,7 @@ def default_crab_model(init_pars=None, frozen=None):
         list of frozen parameters
     """
     bounds_fullcrab = dict(
-        [
-            (val, (0, np.inf))
-            for val in ["amplitude00", "amplitude10", "amplitude01", "amplitude11"]
-        ]
+        [(val, (0, np.inf)) for val in ["amplitude00", "amplitude10", "amplitude01", "amplitude11"]]
     )
     bounds_fullcrab.update(
         dict([(val, (0.01, 0.2)) for val in ["fwhm10", "fwhm20", "fwhm11", "fwhm21"]])
@@ -297,9 +288,7 @@ def get_initial_parameters(input_phases, profile):
     if len(profile) > 200:
         window_length = profile.size / 50
         polyorder = min(3, window_length - 1)
-        profile = savgol_filter(
-            profile, window_length, polyorder, mode="wrap", cval=0.0
-        )
+        profile = savgol_filter(profile, window_length, polyorder, mode="wrap", cval=0.0)
 
     roll_by = int(profile.size * 0.4)
 
@@ -427,9 +416,7 @@ def fill_template_table(model_fit, nbins=512, template_table=None, model_init=No
     template_table["profile"] = factor * renorm_model(phases + phase_max)
     template_table["profile_raw"] = model_fit(phases)
 
-    free_par_names = [
-        par for par in model_fit.param_names if not getattr(model_fit, par).fixed
-    ]
+    free_par_names = [par for par in model_fit.param_names if not getattr(model_fit, par).fixed]
 
     par = [getattr(model_fit, par).value for par in free_par_names]
     par_err = [model_fit.cov_matrix.cov_matrix[i, i] ** 0.5 for i in range(len(par))]
@@ -527,14 +514,10 @@ def fit_and_save_single_profile(
     frozen = None
     if freeze_most:
         frozen = [
-            key
-            for key in init_pars.keys()
-            if key not in ["amplitude_0", "amplitude_1", "x00_2"]
+            key for key in init_pars.keys() if key not in ["amplitude_0", "amplitude_1", "x00_2"]
         ]
 
-    model_init, model_fit = fit_crab_profile(
-        phases, profile, init_pars=init_pars, frozen=frozen
-    )
+    model_init, model_fit = fit_crab_profile(phases, profile, init_pars=init_pars, frozen=frozen)
     output_table = fill_template_table(model_fit, nbins=nbins, model_init=model_init)
     phase_max = None
     if additional_meta is not None:
@@ -576,9 +559,7 @@ def create_template_from_profile_table(
     if "profile_1" not in profile_table.colnames:
         log.info("Single peak profile, nothing else to do")
         if output_template_fname is not None:
-            output_template_table.write(
-                output_template_fname, overwrite=True, serialize_meta=True
-            )
+            output_template_table.write(output_template_fname, overwrite=True, serialize_meta=True)
         return output_template_table
 
     log.info("Fitting subpeaks")
@@ -593,23 +574,24 @@ def create_template_from_profile_table(
 
         init_pars = copy.deepcopy(output_template_table.meta["best_fit"])
         init_pars["amplitude_0"] *= profile.sum() / profile_table["profile"].sum()
-
-        output_table = fit_and_save_single_profile(
-            phases,
-            profile,
-            nbins=nbins,
-            additional_meta=profile_table.meta,
-            init_pars=init_pars,
-            freeze_most=freeze_most,
-        )
+        try:
+            output_table = fit_and_save_single_profile(
+                phases,
+                profile,
+                nbins=nbins,
+                additional_meta=profile_table.meta,
+                init_pars=init_pars,
+                freeze_most=freeze_most,
+            )
+        except Exception as e:
+            log.error(f"Error fitting {col}: {e}")
+            continue
         output_template_table[col] = output_table["profile"]
         output_template_table[col].meta.update(output_table.meta)
         output_template_table[col].meta.update(profile_table[col].meta)
 
     if output_template_fname is not None:
-        output_template_table.write(
-            output_template_fname, overwrite=True, serialize_meta=True
-        )
+        output_template_table.write(output_template_fname, overwrite=True, serialize_meta=True)
     return output_template_table
 
 

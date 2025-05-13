@@ -113,9 +113,7 @@ def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_windo
         if len(profile) > 200:
             window_length = profile.size / 50
             polyorder = min(3, window_length - 1)
-            profile = savgol_filter(
-                profile, window_length, polyorder, mode="wrap", cval=0.0
-            )
+            profile = savgol_filter(profile, window_length, polyorder, mode="wrap", cval=0.0)
         profile = profile - profile.min()
         profile = profile / profile.max()
         normalized_phaseogram[:, iph] = profile
@@ -129,9 +127,7 @@ def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_windo
     return phases, times, normalized_phaseogram, meantime_mjd
 
 
-def _plot_phaseogram(
-    phases, time_hrs, phas, meantime_mjd, ax, title=None, label_y=True
-):
+def _plot_phaseogram(phases, time_hrs, phas, meantime_mjd, ax, title=None, label_y=True):
     from stingray.pulse.search import plot_phaseogram
 
     plot_phaseogram(
@@ -172,23 +168,15 @@ class GetPhaseogram(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetParfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetTemplate(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_phaseograms.txt")
-        )
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_phaseograms.txt"))
 
     def run(self):
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
 
@@ -248,23 +236,10 @@ class GetPhaseogram(luigi.Task):
 
         nbin = 512
         output_files = []
-        previous_mjdstart = -1
-        previous_mjdstop = -1
 
-        for subprofile_count, events in enumerate(
-            fitsreader.apply_gti_lists(split_gti)
-        ):
+        for subprofile_count, events in enumerate(fitsreader.apply_gti_lists(split_gti)):
             mjdstart = events.gti[0, 0] / 86400 + events.mjdref
             mjdstop = events.gti[-1, 1] / 86400 + events.mjdref
-
-            # This is only useful until
-            # https://github.com/StingraySoftware/stingray/pull/858 is merged
-            if np.isclose(mjdstart, previous_mjdstart) and np.isclose(
-                mjdstop, previous_mjdstop
-            ):
-                continue
-            previous_mjdstart = mjdstart
-            previous_mjdstop = mjdstop
 
             mean_met = (events.gti[0, 0] + events.gti[-1, 1]) / 2
             parfile = parfiles[np.argmin(np.abs(model_epochs_met - mean_met))]
@@ -286,13 +261,12 @@ class GetPhaseogram(luigi.Task):
             tot_time = mjdstop - mjdstart
             ntimebin = int(max(tot_phots // 200_000, tot_time * 4, 10))
             expo = None
+
             # In principle, this should be applied to each sub-interval of the phaseogram.
             if hasattr(events, "prior") and (
                 np.any(events.prior != 0) or np.any(np.isnan(events.prior))
             ):
-                phases_livetime_start = correction_fun(
-                    times_from_mjdstart - events.prior
-                )
+                phases_livetime_start = correction_fun(times_from_mjdstart - events.prior)
                 phase_edges = np.linspace(0, 1, nbin + 1)
                 weights = _create_weights(
                     phases_livetime_start.astype(float),
@@ -353,24 +327,16 @@ class GetPulseFreq(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetParfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetTemplate(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_best_cands.ecsv")
-        )
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_best_cands.ecsv"))
 
     def run(self):
         N = 6
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
         events = get_events_from_fits(self.fname)
@@ -445,9 +411,7 @@ class GetPulseFreq(luigi.Task):
                 pepoch=ref_time,
                 oversample=N * 8,
             )
-            efperiodogram.upperlim = pf_upper_limit(
-                np.max(stats), events.time.size, n=N
-            )
+            efperiodogram.upperlim = pf_upper_limit(np.max(stats), events.time.size, n=N)
             efperiodogram.ncounts = events.time.size
             best_cand_table = _analyze_qffa_results(efperiodogram)
             best_cand_table["f_err_n"] = [
@@ -482,9 +446,7 @@ class GetParfile(luigi.Task):
 
     def run(self):
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
         ephem = info["ephem"]
@@ -502,9 +464,7 @@ class GetParfile(luigi.Task):
         fname = self.output().path
         force_parameters = None
         if "ra_bary" in info and info["ra_bary"] is not None:
-            log.info(
-                "Trying to set coordinates to the values found in the FITS file header"
-            )
+            log.info("Trying to set coordinates to the values found in the FITS file header")
             force_parameters = {
                 "RAJ": info["ra_bary"] * u.deg,
                 "DECJ": info["dec_bary"] * u.deg,
@@ -513,15 +473,11 @@ class GetParfile(luigi.Task):
         model1 = get_crab_ephemeris(
             info["mjdstart"], ephem=ephem, force_parameters=force_parameters
         )
-        model2 = get_crab_ephemeris(
-            info["mjdstop"], ephem=ephem, force_parameters=force_parameters
-        )
+        model2 = get_crab_ephemeris(info["mjdstop"], ephem=ephem, force_parameters=force_parameters)
 
         if model1.PEPOCH.value != model2.PEPOCH.value:
             warnings.warn(f"Different models for start and stop of {self.fname}")
-            n_months = max(
-                np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int), 2
-            )
+            n_months = max(np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int), 2)
             models = [
                 get_crab_ephemeris(mjd, ephem=ephem, force_parameters=force_parameters)
                 for mjd in np.linspace(info["mjdstart"], info["mjdstop"], n_months)
@@ -562,9 +518,7 @@ class GetTemplate(luigi.Task):
 
     def run(self):
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
         template_file = get_template(info["source"], info)

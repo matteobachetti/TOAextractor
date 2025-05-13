@@ -131,9 +131,7 @@ def get_phase_from_ephemeris_file(
     parfile = parfile
     m = get_model(parfile)
 
-    mjds = np.linspace(
-        max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value), ntimes
-    )
+    mjds = np.linspace(max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value), ntimes)
     toalist = prepare_TOAs(mjds, ephem)
 
     phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))
