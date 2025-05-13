@@ -1,19 +1,18 @@
 import os
 from collections.abc import Iterable
 from io import StringIO
-from astropy import log
 from urllib.request import urlopen
+
+import astropy.units as u
+import numpy as np
+import pint
+import pint.fitter
+import pint.simulation
+from astropy import log
+from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astroquery.heasarc import Heasarc
-import numpy as np
-import astropy.units as u
-import pint
-import pint.simulation
 from pint.models import get_model
-import pint.fitter
-
-
-from astropy.coordinates import SkyCoord
 
 crab_coords = SkyCoord("05h34m31.972", "22d00m52.07", frame="fk5")
 crab_coords_icrs = crab_coords.icrs

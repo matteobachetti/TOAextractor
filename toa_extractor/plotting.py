@@ -1,50 +1,33 @@
 import os
-import pandas as pd
-import numpy as np
-from astropy.table import Table
-from bokeh.plotting import figure, output_file, show, save
-from bokeh.models import Whisker, ColumnDataSource, PolyAnnotation, BoxAnnotation
-from bokeh.models import CDSView, GroupFilter
 
-from bokeh.transform import factor_cmap, factor_mark
+import numpy as np
+import pandas as pd
+from astropy import units as u
+from astropy.table import Table
+from bokeh.models import (
+    BoxAnnotation,
+    CDSView,
+    ColumnDataSource,
+    GroupFilter,
+    PolyAnnotation,
+    Whisker,
+)
 from bokeh.palettes import Category20b_20
+from bokeh.plotting import figure, output_file, save, show
+from bokeh.transform import factor_cmap, factor_mark
+from uncertainties import ufloat
+
+from .utils import root_name
 
 # from bokeh.layouts import column
 from .utils.crab import retrieve_cgro_ephemeris
-from .utils import root_name
-from astropy import units as u
-from uncertainties import ufloat
 
 curdir = os.path.dirname(__file__)
 datadir = os.path.join(curdir, "data")
 
 
 def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual"):
-
     df = pd.read_csv(fname)
-
-    # # ---- Frequency residuals ----
-    # f_res_label = "delta_f"
-    # df[f_res_label] = df["local_best_freq"] - df["initial_freq_estimate"]
-    # df[f_res_label + "_err"] = (
-    #     np.abs(df["local_best_freq_err_n"]) + np.abs(df["local_best_freq_err_p"])
-    # ) / 2
-    # factor = ((1 * u.Hz) / (1 * u.Unit(freq_units))).to("").value
-    # for col in f_res_label, f_res_label + "_err":
-    #     diff_str = col.replace(f_res_label, "")
-    #     df[f_res_label + f"_{freq_units}" + diff_str] = df[col] * factor
-
-    # f_res_label = f_res_label + f"_{freq_units}"
-
-    # res_str = [
-    #     f"{ufloat(res, err):P} {freq_units}"
-    #     for res, err in zip(df[f_res_label], df[f_res_label + "_err"])
-    # ]
-    # df["delta_f"] = df[f_res_label]
-    # df["delta_f_str"] = res_str
-
-    # df["delta_f_upper"] = np.array(df[f_res_label] + df[f_res_label + "_err"])
-    # df["delta_f_lower"] = np.array(df[f_res_label] - df[f_res_label + "_err"])
 
     # ---- Time residuals ----
     factor = ((1 * u.s) / (1 * u.Unit(time_units))).to("").value
@@ -92,7 +75,6 @@ def plot_frequency_history(
     res_label="Residuals",
     **figure_kwargs,
 ):
-
     df = full_dataset.to_df()
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
     all_missions = sorted(list(set(df["mission"])))
@@ -128,7 +110,7 @@ def plot_frequency_history(
             fill_color="red",
             left=mjd - 0.5 * mjde,
             right=mjd + 0.5 * mjde,
-            fill_alpha=0.2,
+            fill_alpha=0.4,
             line_width=2,
             line_alpha=0.2,
             line_color="red",
@@ -254,6 +236,9 @@ def plot_residuals(
             <span>ObsID @obsid</span>
         </div>
         <div>
+            <span>@fname</span>
+        </div>
+        <div>
             <span style="font-size: 15px; color: #696;">@delta_t_str</span>
         </div>
     </div>
@@ -311,8 +296,10 @@ def plot_residuals(
         "diamond_dot",
         "dot",
     ]
-
-    markers = factor_mark("mission", MARKERS, factors=all_missions)
+    if len(mission_ephem_combs) < len(MARKERS):
+        markers = factor_mark("mission+ephem", MARKERS, factors=mission_ephem_combs)
+    else:
+        markers = factor_mark("mission", MARKERS, factors=all_missions)
     for m in mission_ephem_combs:
         group = GroupFilter(column_name="mission+ephem", group=m)
         # source = df
@@ -417,7 +404,7 @@ def main(args=None):
         dataset,
         glitch_data,
         width=1200,
-        height=400,
+        height=600,
         res_label=rf"$$\Delta{{\rm TOA}} ({time_units_str})$$",
     )
 
@@ -462,4 +449,7 @@ def main(args=None):
     output_file(args.output)
     save(p)
 
-    show(p)
+    try:
+        show(p)
+    except RuntimeError:
+        pass

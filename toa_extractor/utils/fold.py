@@ -1,8 +1,8 @@
-from numba import njit
 import numpy as np
-from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
-from scipy.interpolate import interp1d
 from astropy.table import Table
+from numba import njit
+from scipy.interpolate import interp1d
+from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
 from stingray.utils import histogram2d
 
 ONE_SIXTH = 1 / 6
@@ -131,9 +131,7 @@ def get_phase_from_ephemeris_file(
     parfile = parfile
     m = get_model(parfile)
 
-    mjds = np.linspace(
-        max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value), ntimes
-    )
+    mjds = np.linspace(max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value), ntimes)
     toalist = prepare_TOAs(mjds, ephem)
 
     phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))

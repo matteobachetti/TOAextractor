@@ -1,11 +1,16 @@
 import os
 import warnings
+
 import numpy as np
-from stingray import EventList
-from stingray.io import read_mission_info, get_key_from_mission_info
-from stingray.io import high_precision_keyword_read
 from astropy import log
 from astropy.io import fits
+from stingray import EventList
+from stingray.io import (
+    get_key_from_mission_info,
+    high_precision_keyword_read,
+    read_mission_info,
+)
+
 from . import safe_get_key
 
 
@@ -136,9 +141,15 @@ def load_events_and_gtis(
             Chandra's instruments)
     """
     from astropy.io import fits as pf
-    from stingray.io import rough_calibration, get_gti_from_all_extensions
-    from stingray.io import load_gtis, _get_additional_data, AstropyUserWarning
-    from stingray.io import order_list_of_arrays, EventReadOutput
+    from stingray.io import (
+        AstropyUserWarning,
+        EventReadOutput,
+        _get_additional_data,
+        get_gti_from_all_extensions,
+        load_gtis,
+        order_list_of_arrays,
+        rough_calibration,
+    )
 
     hdulist = pf.open(fits_file)
     probe_header = hdulist[0].header
@@ -359,37 +370,44 @@ def get_observing_info(evfile, hduname=1):
         header = hdu.header
 
         if "EXPOSURE" in header:
-            ctrate = header["NAXIS2"] / header["EXPOSURE"]
-        else:
-            # Need better estimate
-            ctrate = header["NAXIS2"] / (header["TSTOP"] - header["TSTART"])
+            exposure = header["EXPOSURE"]
+        elif "TSTOP" in header and "TSTART" in header:
+            exposure = header["TSTOP"] - header["TSTART"]
 
-        info["fname"] = os.path.abspath(evfile)
+        ctrate = header["NAXIS2"] / exposure
+
+        def float_if_not_none(val):
+            return float(val) if val is not None else None
+
+        info["path"] = os.path.abspath(os.path.dirname(evfile))
+        info["fname"] = os.path.basename(evfile)
+        info["nphots"] = header["NAXIS2"]
         info["obsid"] = safe_get_key(header, "OBS_ID", "")
         info["mission"] = mission
         info["instrument"] = instr
         mjdref_highprec = high_precision_keyword_read(header, "MJDREF")
         info["mjdref_highprec"] = f"{mjdref_highprec:0.15f}"
-        info["mjdref"] = float(info["mjdref_highprec"])
+        info["mjdref"] = float_if_not_none(info["mjdref_highprec"])
         info["mode"] = mode
-        info["ephem"] = (
-            safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip("JPL-").lower()
-        )
+        info["ephem"] = safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip("JPL-").lower()
         info["timesys"] = safe_get_key(header, "TIMESYS", "TDB").strip().lower()
         info["timeref"] = safe_get_key(header, "TIMEREF", "SOLARSYSTEM").strip().lower()
-        info["tstart"] = float(safe_get_key(header, "TSTART", None))
-        info["tstop"] = float(safe_get_key(header, "TSTOP", None))
+        info["tstart"] = float_if_not_none(safe_get_key(header, "TSTART", None))
+        info["tstop"] = float_if_not_none(safe_get_key(header, "TSTOP", None))
         info["source"] = safe_get_key(header, "OBJECT", "")
-        info["ra"] = float(safe_get_key(header, "RA_OBJ", None))
-        info["dec"] = float(safe_get_key(header, "DEC_OBJ", None))
+        info["ra"] = float_if_not_none(safe_get_key(header, "RA_OBJ", None))
+        info["dec"] = float_if_not_none(safe_get_key(header, "DEC_OBJ", None))
         info["ra_bary"] = info["dec_bary"] = None
-        if "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"]:
+        if "RA_BARY" in header and "bary" in header.comments["RA_BARY"]:
+            info["ra_bary"] = header["RA_BARY"]
+            info["dec_bary"] = header["DEC_BARY"]
+        elif "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"]:
             info["ra_bary"] = header["RA_OBJ"]
             info["dec_bary"] = header["DEC_OBJ"]
-        info["mjdstart"] = float(info["tstart"] / 86400 + mjdref_highprec)
-        info["mjdstop"] = float(info["tstop"] / 86400 + mjdref_highprec)
+        info["mjdstart"] = float_if_not_none(info["tstart"] / 86400 + mjdref_highprec)
+        info["mjdstop"] = float_if_not_none(info["tstop"] / 86400 + mjdref_highprec)
         MJD = float(info["mjdstart"] + info["mjdstop"]) / 2
         info["mjd"] = MJD
-        info["countrate"] = float(ctrate)
+        info["countrate"] = float_if_not_none(ctrate)
 
     return info

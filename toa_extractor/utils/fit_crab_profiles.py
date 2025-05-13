@@ -1,12 +1,13 @@
 import copy
+
+import matplotlib.pyplot as plt
 import numpy as np
+from astropy import log
+from astropy.modeling.fitting import TRFLSQFitter
+from astropy.modeling.models import Const1D, custom_model
+from astropy.table import Table
 from scipy.optimize import fmin
 
-
-from astropy.modeling.models import custom_model, Const1D
-from astropy.modeling.fitting import TRFLSQFitter
-from astropy.table import Table
-import matplotlib.pyplot as plt
 from toa_extractor.utils import root_name
 
 
@@ -24,19 +25,13 @@ def _plot_profile_and_fit(
 
     label = "Data"
     if profile_raw is not None:
-        axfit.plot(
-            phases, profile_raw, ds="steps-mid", color="r", alpha=0.5, label="Data"
-        )
+        axfit.plot(phases, profile_raw, ds="steps-mid", color="r", alpha=0.5, label="Data")
         label = "Deadtime-corrected Data"
     axfit.plot(phases, profile, ds="steps-mid", color="r", label=label)
 
     if model_init is not None:
-        axfit.plot(
-            phases, model_init(phases), color="grey", alpha=0.5, label="Init model"
-        )
-    axfit.plot(
-        phases, model_fit(phases), color="k", zorder=20, lw=1.5, label="Fit model"
-    )
+        axfit.plot(phases, model_init(phases), color="grey", alpha=0.5, label="Init model")
+    axfit.plot(phases, model_fit(phases), color="k", zorder=20, lw=1.5, label="Fit model")
 
     peak_colors = ["b", "navy"]
     m = model_fit[2]
@@ -159,9 +154,7 @@ def skewed_peak(x, amplitude0=1, amplitude1=1, x0=0, dx0=0, fwhm0=1, fwhm1=1, fw
     x = np.asanyarray(x)
 
     sym_lor = lorentzian(x, amplitude=amplitude0, x0=x0, fwhm=fwhm0)
-    asym_lor = asymmetric_lorentzian(
-        x, amplitude=amplitude1, x0=x0 + dx0, fwhm1=fwhm1, fwhm2=fwhm2
-    )
+    asym_lor = asymmetric_lorentzian(x, amplitude=amplitude1, x0=x0 + dx0, fwhm1=fwhm1, fwhm2=fwhm2)
 
     return sym_lor + asym_lor
 
@@ -206,14 +199,16 @@ def full_crab_profile_model(
         fwhm1=fwhm11,
         fwhm2=fwhm21,
     )
-
-    return peak1 + peak2
+    res = peak1 + peak2
+    # if amplitude10 > amplitude00:
+    #     res *= 0.0
+    return res
 
 
 FullCrab = custom_model(full_crab_profile_model)
 
 
-def default_crab_model(init_pars=None):
+def default_crab_model(init_pars=None, frozen=None):
     """Default model for the Crab
 
     The model consists of an external normalization parameter, a DC level,
@@ -245,12 +240,11 @@ def default_crab_model(init_pars=None):
         + ``fwhm11_2``: The right FWHM of the secondary peak's asymmetric Lorentzian
         + ``fwhm21_2``: The left FWHM of the secondary peak's asymmetric Lorentzian
 
+    frozen: list, default None
+        list of frozen parameters
     """
     bounds_fullcrab = dict(
-        [
-            (val, (0, np.inf))
-            for val in ["amplitude00", "amplitude10", "amplitude01", "amplitude11"]
-        ]
+        [(val, (0, np.inf)) for val in ["amplitude00", "amplitude10", "amplitude01", "amplitude11"]]
     )
     bounds_fullcrab.update(
         dict([(val, (0.01, 0.2)) for val in ["fwhm10", "fwhm20", "fwhm11", "fwhm21"]])
@@ -260,7 +254,7 @@ def default_crab_model(init_pars=None):
     bounds_fullcrab["peak_separation"] = (
         0.35,
         0.45,
-    )  # Account for the possibility of misingerpreting the first peak
+    )  # Account for the possibility of misinterpreting the first peak
 
     model_init = Const1D(bounds={"amplitude": (0, np.inf)}) * (
         Const1D(bounds={"amplitude": (0, np.inf)}) + FullCrab(bounds=bounds_fullcrab)
@@ -268,6 +262,12 @@ def default_crab_model(init_pars=None):
     if init_pars is not None:
         for key, val in init_pars.items():
             setattr(model_init, key, val)
+
+    if frozen is not None:
+        for key in frozen:
+            if key in model_init.param_names:
+                print("Freezing", key)
+                getattr(model_init, key).fixed = True
     return model_init
 
 
@@ -288,9 +288,7 @@ def get_initial_parameters(input_phases, profile):
     if len(profile) > 200:
         window_length = profile.size / 50
         polyorder = min(3, window_length - 1)
-        profile = savgol_filter(
-            profile, window_length, polyorder, mode="wrap", cval=0.0
-        )
+        profile = savgol_filter(profile, window_length, polyorder, mode="wrap", cval=0.0)
 
     roll_by = int(profile.size * 0.4)
 
@@ -307,7 +305,11 @@ def get_initial_parameters(input_phases, profile):
 
     ph1 = phases[idx_1]
     baseline = np.min(profile)
+
     amplitude1 = profile[idx_1] - baseline
+    if baseline < 0:
+        amplitude1 += -baseline
+        baseline = 0
 
     fwhm1 = 0.03
     fwhm2 = 0.08
@@ -316,30 +318,30 @@ def get_initial_parameters(input_phases, profile):
     prof_filt2 = copy.deepcopy(profile)
     prof_filt2[np.abs(phases + ph1 - 0.4) > 0.2] = 0
     idx_2 = np.argmax(prof_filt2)
-    amplitude2 = profile[idx_2] - baseline
+    amplitude2 = max(profile[idx_2] - baseline, 0)
 
     init_pars = {
-        "amplitude_0": amplitude1,
-        "amplitude_1": baseline / amplitude1,
-        "amplitude00_2": 0.75,
-        "amplitude10_2": 0.5,
-        "x00_2": ph1,
-        "dx00_2": 0,
-        "fwhm00_2": fwhm1,
-        "fwhm10_2": fwhm1 * 2,
-        "fwhm20_2": fwhm1 * 2,
-        "amplitude01_2": amplitude2 / amplitude1 / 10 * 6,
-        "amplitude11_2": amplitude2 / amplitude1 / 10 * 4,
-        "peak_separation": ph1 + 0.4,
-        "dx01_2": 0,
-        "fwhm01_2": fwhm2,
-        "fwhm11_2": fwhm2 * 2,
-        "fwhm21_2": fwhm2 * 2,
+        "amplitude_0": amplitude1,  # external normalization
+        "amplitude_1": baseline / amplitude1,  # DC level
+        "amplitude00_2": 0.75,  # main peak's sym Lor
+        "amplitude10_2": 0.5,  # main peak's asym Lor
+        "x00_2": ph1,  # phase of main peak's sym Lor
+        "dx00_2": -0.01,  # phase separation of main peak's asym Lor
+        "fwhm00_2": fwhm1,  # FWHM of main peak's sym Lor
+        "fwhm10_2": fwhm1 * 2,  # right FWHM of main peak's asym Lor
+        "fwhm20_2": fwhm1 * 2,  # left FWHM of main peak's asym Lor
+        "amplitude01_2": amplitude2 / amplitude1 / 10 * 6,  # ampl. of secondary peak's sym Lor
+        "amplitude11_2": amplitude2 / amplitude1 / 10 * 4,  # ampl. of secondary peak's asym Lor
+        "peak_separation": ph1 + 0.4,  # separation between the sym Lors of the two peaks
+        "dx01_2": 0.0,  # separation in phase of secondary peak's asym Lor
+        "fwhm01_2": fwhm2,  # FWHM of secondary peak's sym Lor
+        "fwhm11_2": fwhm2 * 2,  # right FWHM of secondary peak's asym Lor
+        "fwhm21_2": fwhm2 * 2,  # left FWHM of secondary peak's asym Lor
     }
     return init_pars
 
 
-def fit_crab_profile(phases, profile, fitter=None):
+def fit_crab_profile(phases, profile, fitter=None, init_pars=None, frozen=None):
     """Fit a Crab profile with a mixture of symmetric and asymmetric Lorentzians
 
     Parameters
@@ -353,6 +355,10 @@ def fit_crab_profile(phases, profile, fitter=None):
     ----------------
     fitter : astropy.modeling.fitting.Fitter
         The fitter to use (default is :class:`astropy.modeling.fitting.TRFLSQFitter`)
+    init_pars: dict
+        The initial model parameters to use for the fit. If None, a default model is used
+    frozen: list
+        List of parameters to freeze
 
     Returns
     -------
@@ -363,9 +369,45 @@ def fit_crab_profile(phases, profile, fitter=None):
     """
     if fitter is None:
         fitter = TRFLSQFitter(calc_uncertainties=True)
-    init_pars = get_initial_parameters(phases, profile)
-    model_init = default_crab_model(init_pars=init_pars)
-    model_fit = fitter(model_init, phases, profile, maxiter=200)
+    if init_pars is None:
+        init_pars = get_initial_parameters(phases, profile)
+    model_init = default_crab_model(init_pars=init_pars, frozen=frozen)
+    log.info("Initial parameters:")
+    for par in model_init.param_names:
+        fixed_str = "fixed" if getattr(model_init, par).fixed else "free"
+        val = getattr(model_init, par).value
+        bounds = getattr(model_init, par).bounds
+        log.info(f"    {par}: {val:.2e} {fixed_str} {bounds}")
+
+    weights = None
+    if np.all(profile > 20):
+        weights = 1 / np.sqrt(profile)
+
+    model_fit = fitter(
+        model_init,
+        phases,
+        profile,
+        maxiter=200,
+        weights=weights,
+        acc=0.001,
+    )
+    log.info("Fit parameters:")
+    log.info(f"External normalization: {model_fit.amplitude_0.value:.2e}")
+    log.info(f"DC level: {model_fit.amplitude_1.value:.2e}")
+    log.info(f"    Main peak phase: {model_fit.x00_2.value:.2e}")
+    log.info(f"    Main peak sym. comp. amplitude: {model_fit.amplitude00_2.value:.2e}")
+    log.info(f"    Main peak sym. comp. FWHM: {model_fit.fwhm00_2.value:.2e}")
+    log.info(f"    Main peak comp. sep.: {model_fit.dx00_2.value:.2e}")
+    log.info(f"    Main peak asym comp. amplitude: {model_fit.amplitude10_2.value:.2e}")
+    log.info(f"    Main peak asym comp. FWHM (L): {model_fit.fwhm10_2.value:.2e}")
+    log.info(f"    Main peak asym comp. FWHM (R): {model_fit.fwhm20_2.value:.2e}")
+    log.info(f"    Peak separation: {model_fit.peak_separation_2.value:.2e}")
+    log.info(f"    Secondary peak sym comp. amplitude: {model_fit.amplitude01_2.value:.2e}")
+    log.info(f"    Secondary peak sym. comp. FWHM: {model_fit.fwhm01_2.value:.2e}")
+    log.info(f"    Secondary peak comp. sep.: {model_fit.dx01_2.value:.2e}")
+    log.info(f"    Secondary peak asym comp. amplitude: {model_fit.amplitude11_2.value:.2e}")
+    log.info(f"    Secondary peak asym comp. FWHM (L): {model_fit.fwhm11_2.value:.2e}")
+    log.info(f"    Secondary peak asym comp. FWHM (R): {model_fit.fwhm21_2.value:.2e}")
     return model_init, model_fit
 
 
@@ -383,14 +425,18 @@ def fill_template_table(model_fit, nbins=512, template_table=None, model_init=No
     template_table["profile"] = factor * renorm_model(phases + phase_max)
     template_table["profile_raw"] = model_fit(phases)
 
-    par, par_err = model_fit.parameters, [
-        model_fit.cov_matrix.cov_matrix[i, i] ** 0.5
-        for i in range(len(model_fit.parameters))
-    ]
+    free_par_names = [par for par in model_fit.param_names if not getattr(model_fit, par).fixed]
+
+    par = [getattr(model_fit, par).value for par in free_par_names]
+    par_err = [model_fit.cov_matrix.cov_matrix[i, i] ** 0.5 for i in range(len(par))]
+
     template_table.meta["best_fit"] = {}
-    for name, p, pe in zip(model_fit.param_names, par, par_err):
+    for name, p in zip(model_fit.param_names, model_fit.parameters):
         template_table.meta["best_fit"][name] = p
+
+    for name, pe in zip(free_par_names, par_err):
         template_table.meta["best_fit"][name + "_err"] = pe
+
     if model_init is not None:
         par = model_init.parameters
         template_table.meta["model_init"] = {}
@@ -464,6 +510,42 @@ def plot_fit_diagnostics(
         plt.show()
 
 
+def fit_and_save_single_profile(
+    phases,
+    profile,
+    nbins=512,
+    additional_meta=None,
+    plot=False,
+    plot_file=None,
+    init_pars=None,
+    freeze_most=False,
+):
+    frozen = None
+    if freeze_most:
+        frozen = [
+            key for key in init_pars.keys() if key not in ["amplitude_0", "amplitude_1", "x00_2"]
+        ]
+
+    model_init, model_fit = fit_crab_profile(phases, profile, init_pars=init_pars, frozen=frozen)
+    output_table = fill_template_table(model_fit, nbins=nbins, model_init=model_init)
+    phase_max = None
+    if additional_meta is not None:
+        output_table.meta.update(additional_meta)
+
+    phase_max = output_table.meta["phase_max"]
+
+    if plot:
+        plot_fit_diagnostics(
+            phases,
+            profile,
+            model_fit,
+            phase_max=phase_max,
+            model_init=model_init,
+            plot_file=plot_file,
+        )
+    return output_table
+
+
 def create_template_from_profile_table(
     input_profile_fname,
     output_template_fname=None,
@@ -473,30 +555,52 @@ def create_template_from_profile_table(
 ):
     profile_table = Table.read(input_profile_fname)
     phases, profile = profile_table["phase"], profile_table["profile"]
-    model_init, model_fit = fit_crab_profile(phases, profile)
 
-    empty_template_table = Table()
-    empty_template_table.meta.update(profile_table.meta)
-    output_template_table = fill_template_table(
-        model_fit,
+    output_template_table = fit_and_save_single_profile(
+        phases,
+        profile,
         nbins=nbins,
-        template_table=empty_template_table,
-        model_init=model_init,
+        additional_meta=profile_table.meta,
+        plot=plot,
+        plot_file=plot_file,
     )
 
-    if plot:
-        plot_fit_diagnostics(
-            phases,
-            profile,
-            model_fit,
-            phase_max=output_template_table.meta["phase_max"],
-            model_init=model_init,
-            plot_file=plot_file,
-        )
+    if "profile_1" not in profile_table.colnames:
+        log.info("Single peak profile, nothing else to do")
+        if output_template_fname is not None:
+            output_template_table.write(output_template_fname, overwrite=True, serialize_meta=True)
+        return output_template_table
+
+    log.info("Fitting subpeaks")
+
+    # Freeze most parameters in sub-intervals, but only if the observation
+    # is divided in more than 3 sub-intervals.
+    freeze_most = "profile_3" in profile_table.colnames
+    for col in profile_table.colnames:
+        if not col.startswith("profile_") or "raw" in col:
+            continue
+        phases, profile = profile_table["phase"], profile_table[col]
+
+        init_pars = copy.deepcopy(output_template_table.meta["best_fit"])
+        init_pars["amplitude_0"] *= profile.sum() / profile_table["profile"].sum()
+        try:
+            output_table = fit_and_save_single_profile(
+                phases,
+                profile,
+                nbins=nbins,
+                additional_meta=profile_table.meta,
+                init_pars=init_pars,
+                freeze_most=freeze_most,
+            )
+        except Exception as e:
+            log.error(f"Error fitting {col}: {e}")
+            continue
+        output_template_table[col] = output_table["profile"]
+        output_template_table[col].meta.update(output_table.meta)
+        output_template_table[col].meta.update(profile_table[col].meta)
+
     if output_template_fname is not None:
-        output_template_table.write(
-            output_template_fname, overwrite=True, serialize_meta=True
-        )
+        output_template_table.write(output_template_fname, overwrite=True, serialize_meta=True)
     return output_template_table
 
 

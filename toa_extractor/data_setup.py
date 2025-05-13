@@ -1,34 +1,108 @@
 import shutil
 import warnings
+
 import luigi
-import yaml
+import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 from astropy import log
 from astropy import units as u
-from astropy.table import vstack, Table
-import matplotlib.pyplot as plt
-from scipy.signal import savgol_filter
-
-from stingray.pulse.pulsar import get_model
+from astropy.table import Table, vstack
 from hendrics.efsearch import (
-    search_with_qffa,
     EFPeriodogram,
-    pf_upper_limit,
     _analyze_qffa_results,
+    pf_upper_limit,
+    search_with_qffa,
 )
+from pulse_deadtime_fix.core import _create_weights
+from scipy.signal import savgol_filter
+from stingray import EventList
+from stingray.gti import cross_two_gtis, split_gtis_by_exposure
+from stingray.io import FITSTimeseriesReader
+from stingray.pulse.pulsar import get_model
+
+from .utils import output_name
+from .utils.config import get_template, load_yaml_file
 
 # from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris
-from .utils.config import get_template, load_yaml_file
-from .utils import output_name
-from .utils.data_manipulation import get_observing_info
-from .utils.data_manipulation import get_events_from_fits
+from .utils.data_manipulation import get_events_from_fits, get_observing_info
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
-from pulse_deadtime_fix.core import _create_weights
+
+
+def hrc_true_rate(rate: float):
+    if isinstance(rate, np.ndarray):
+        return np.asarray([hrc_true_rate(r) for r in rate])
+    if rate < 12:
+        return rate
+    if rate > 24:
+        warnings.warn("The rate is too high for HRC correction")
+    rate_lim = 2058.4 / 75.6
+    if rate > rate_lim:
+        rate = rate_lim
+    corr = 45.91 - (2058.4 - 75.6 * rate) ** 0.5
+    return corr
+
+
+_RATE_CORRECTION_FUNC = {
+    "hrc": hrc_true_rate,
+    "hrc-s": hrc_true_rate,
+    "hrc-i": hrc_true_rate,
+}
+
+
+def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):
+    """Split gtis with various criteria.
+
+    Examples
+    --------
+    >>> gti = np.array([[0, 10], [20, 30]])
+    >>> times = [5, 25]
+    >>> res = split_gtis_at_times_and_exposure(gti, times)
+    >>> assert np.allclose(res[0], np.array([[0, 5]]))
+    >>> assert np.allclose(res[1], np.array([[5, 10], [20, 25]]))
+    >>> assert np.allclose(res[2], np.array([[25, 30]]))
+    >>> res = split_gtis_at_times_and_exposure(gti, [10], max_exposure=5)
+    >>> assert np.allclose(res[0], np.array([[0, 5]]))
+    >>> assert np.allclose(res[1], np.array([[5, 10]]))
+    >>> assert np.allclose(res[2], np.array([[20, 25]]))
+    >>> assert np.allclose(res[3], np.array([[25, 30]]))
+    """
+    duration = np.sum(gti[:, 1] - gti[:, 0])
+
+    if duration < max_exposure and len(times) == 0:
+        return [gti]
+
+    if len(times) == 0:
+        split_gtis = [gti]
+    elif times[0] > gti[0, 0] and times[-1] < gti[-1, 1]:
+        edges = np.concatenate([[gti[0, 0]], times, [gti[-1, 1]]])
+
+        time_intervals = list(zip(edges[:-1], edges[1:]))
+
+        split_gtis = [cross_two_gtis(gti, [t_int]) for t_int in time_intervals]
+    elif times[0] < gti[0, 0]:
+        raise ValueError("First time is smaller than the first GTI")
+    elif times[1] > gti[-1, 1]:
+        raise ValueError("Last time is larger than the last GTI")
+
+    if duration < max_exposure:
+        return split_gtis
+
+    # Otherwise, further split the observation
+
+    new_split_gtis = []
+    for gti in split_gtis:
+        local_duration = np.sum(gti[:, 1] - gti[:, 0])
+        if local_duration > max_exposure:
+            new_split_gtis.extend(split_gtis_by_exposure(gti, max_exposure))
+        else:
+            new_split_gtis.append(gti)
+
+    return new_split_gtis
 
 
 def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_window=None):
-
     table = Table.read(phaseogram_file)
     normalized_phaseogram = (table["profile"].T).astype(float)
 
@@ -39,9 +113,7 @@ def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_windo
         if len(profile) > 200:
             window_length = profile.size / 50
             polyorder = min(3, window_length - 1)
-            profile = savgol_filter(
-                profile, window_length, polyorder, mode="wrap", cval=0.0
-            )
+            profile = savgol_filter(profile, window_length, polyorder, mode="wrap", cval=0.0)
         profile = profile - profile.min()
         profile = profile / profile.max()
         normalized_phaseogram[:, iph] = profile
@@ -55,9 +127,7 @@ def _get_and_normalize_phaseogram(phaseogram_file, time_units="hr", smooth_windo
     return phases, times, normalized_phaseogram, meantime_mjd
 
 
-def _plot_phaseogram(
-    phases, time_hrs, phas, meantime_mjd, ax, title=None, label_y=True
-):
+def _plot_phaseogram(phases, time_hrs, phas, meantime_mjd, ax, title=None, label_y=True):
     from stingray.pulse.search import plot_phaseogram
 
     plot_phaseogram(
@@ -98,27 +168,18 @@ class GetPhaseogram(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetParfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetTemplate(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_phaseograms.txt")
-        )
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_phaseograms.txt"))
 
     def run(self):
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
-
         info = load_yaml_file(infofile)
-        events = get_events_from_fits(self.fname)
+
         ephem = info["ephem"]
         mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
         parfile_list = (
@@ -133,46 +194,79 @@ class GetPhaseogram(luigi.Task):
         )
         # Read list of file ignoring blank lines
         parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
-        models = [get_model(p) for p in parfiles]
-        epochs = np.asarray([m.PEPOCH.value for m in models])
-        mjd_edges = [mjdstart, mjdstop]
-        if len(set(epochs)) > 1:
-            additional_mjd_edges = (epochs[1:] + epochs[:-1]) / 2
-            mjd_edges = np.concatenate([[mjdstart], additional_mjd_edges, [mjdstop]])
 
-        mjds = events.time / 86400 + events.mjdref
+        log.info("Relevant parameter files: " + ",".join(parfiles))
+
+        model_epochs = np.asarray([get_model(p).PEPOCH.value for p in parfiles])
+
+        # Sort parfiles based on model_epochs
+        sorted_indices = np.argsort(model_epochs)
+        parfiles = [parfiles[i] for i in sorted_indices]
+        model_epochs = model_epochs[sorted_indices]
+
+        fitsreader = FITSTimeseriesReader(
+            self.fname, output_class=EventList, additional_columns=["PRIOR"]
+        )
+        model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
+        current_gtis = fitsreader.gti
+
+        obs_will_be_split = False
+        split_at_edges = []
+        if len(set(model_epochs_met)) > 1:
+            split_at_edges = (model_epochs_met[1:] + model_epochs_met[:-1]) / 2
+            obs_will_be_split = True
+
+        nphotons = fitsreader.nphot
+        log.info(f"Number of photons in the observation: {nphotons}.")
+        # If nphotons is too high, further split the intervals
+        photon_max = 5_000_000  # soft upper limit
+        max_exposure = np.inf
+        if nphotons > photon_max * 1.5:
+            max_exposure = fitsreader.exposure * photon_max / nphotons
+            obs_will_be_split = True
+
+        if obs_will_be_split:
+            log.info("Splitting observation into smaller intervals.")
+
+        split_gti = split_gtis_at_times_and_exposure(
+            current_gtis,
+            split_at_edges,
+            max_exposure=max_exposure,
+        )
+
         nbin = 512
-        edge_idxs = np.searchsorted(mjds, mjd_edges)
         output_files = []
 
-        for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
-            if edge_idxs[i] >= events.time.size:
-                warnings.warn("No events in this interval")
-                continue
+        for subprofile_count, events in enumerate(fitsreader.apply_gti_lists(split_gti)):
+            mjdstart = events.gti[0, 0] / 86400 + events.mjdref
+            mjdstop = events.gti[-1, 1] / 86400 + events.mjdref
+
+            mean_met = (events.gti[0, 0] + events.gti[-1, 1]) / 2
+            parfile = parfiles[np.argmin(np.abs(model_epochs_met - mean_met))]
+
+            log.info(f"Using {parfile} for {mjdstart} - {mjdstop}")
 
             correction_fun = get_phase_func_from_ephemeris_file(
                 mjdstart,
                 mjdstop,
-                parfiles[i],
+                parfile,
                 ephem=ephem,
                 return_sec_from_mjdstart=True,
             )
 
-            good = slice(edge_idxs[i], edge_idxs[i + 1])
-            times_from_mjdstart = events.time[good] - (mjdstart - events.mjdref) * 86400
+            times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
             phase = correction_fun(times_from_mjdstart)
 
             tot_phots = times_from_mjdstart.size
             tot_time = mjdstop - mjdstart
             ntimebin = int(max(tot_phots // 200_000, tot_time * 4, 10))
             expo = None
+
             # In principle, this should be applied to each sub-interval of the phaseogram.
             if hasattr(events, "prior") and (
                 np.any(events.prior != 0) or np.any(np.isnan(events.prior))
             ):
-                phases_livetime_start = correction_fun(
-                    times_from_mjdstart - events.prior[good]
-                )
+                phases_livetime_start = correction_fun(times_from_mjdstart - events.prior)
                 phase_edges = np.linspace(0, 1, nbin + 1)
                 weights = _create_weights(
                     phases_livetime_start.astype(float),
@@ -183,16 +277,40 @@ class GetPhaseogram(luigi.Task):
 
             phase -= np.floor(phase)
 
-            model = get_model(parfiles[i])
+            model = get_model(parfile)
             result_table = calculate_dyn_profile(
-                events.time[good], phase, nbin=nbin, ntimebin=ntimebin, expo=expo
+                events.time, phase, nbin=nbin, ntimebin=ntimebin, expo=expo
             )
+            if events.instr is not None and events.instr.lower() in list(
+                _RATE_CORRECTION_FUNC.keys()
+            ):
+                log.info(f"Instrument: {events.instr}")
+                # HRC
+                log.info(f"Using {events.instr} rate correction")
+                tot_prof = np.sum(result_table["profile"], axis=0)
+                avg_rate = tot_prof * nbin / events.exposure
+                fold_correction_fun = _RATE_CORRECTION_FUNC[events.instr.lower()]
+                # avg_rate = np.mean(rate, axis=0)
+                from scipy.ndimage import gaussian_filter1d
+
+                avg_rate = gaussian_filter1d(avg_rate.astype(float), 5, mode="wrap")
+                if np.any(avg_rate <= 0):
+                    warnings.warn("Rate is zero or negative")
+                    continue
+                expo = avg_rate / fold_correction_fun(avg_rate)
+
+                result_table.meta["expo"] = expo
+
             result_table.meta["F0"] = model.F0.value
             result_table.meta["F1"] = model.F1.value
             result_table.meta["F2"] = model.F2.value
             result_table.meta["mjdref"] = events.mjdref
+            result_table.meta["mjdstart"] = mjdstart
+            result_table.meta["mjdstop"] = mjdstop
+            result_table.meta["mjd"] = model.PEPOCH.value
+
             new_file_name = output_name(
-                self.fname, self.version, f"_dynprof_{i:000d}.hdf5"
+                self.fname, self.version, f"_dynprof_{subprofile_count:000d}.hdf5"
             )
             result_table.write(new_file_name, overwrite=True, serialize_meta=True)
             output_files.append(new_file_name)
@@ -209,24 +327,16 @@ class GetPulseFreq(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetParfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetTemplate(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_best_cands.ecsv")
-        )
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_best_cands.ecsv"))
 
     def run(self):
         N = 6
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
         events = get_events_from_fits(self.fname)
@@ -301,9 +411,7 @@ class GetPulseFreq(luigi.Task):
                 pepoch=ref_time,
                 oversample=N * 8,
             )
-            efperiodogram.upperlim = pf_upper_limit(
-                np.max(stats), events.time.size, n=N
-            )
+            efperiodogram.upperlim = pf_upper_limit(np.max(stats), events.time.size, n=N)
             efperiodogram.ncounts = events.time.size
             best_cand_table = _analyze_qffa_results(efperiodogram)
             best_cand_table["f_err_n"] = [
@@ -338,9 +446,7 @@ class GetParfile(luigi.Task):
 
     def run(self):
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
         ephem = info["ephem"]
@@ -358,9 +464,7 @@ class GetParfile(luigi.Task):
         fname = self.output().path
         force_parameters = None
         if "ra_bary" in info and info["ra_bary"] is not None:
-            log.info(
-                "Trying to set coordinates to the values found in the FITS file header"
-            )
+            log.info("Trying to set coordinates to the values found in the FITS file header")
             force_parameters = {
                 "RAJ": info["ra_bary"] * u.deg,
                 "DECJ": info["dec_bary"] * u.deg,
@@ -369,17 +473,27 @@ class GetParfile(luigi.Task):
         model1 = get_crab_ephemeris(
             info["mjdstart"], ephem=ephem, force_parameters=force_parameters
         )
-        model2 = get_crab_ephemeris(
-            info["mjdstop"], ephem=ephem, force_parameters=force_parameters
-        )
+        model2 = get_crab_ephemeris(info["mjdstop"], ephem=ephem, force_parameters=force_parameters)
 
         if model1.PEPOCH.value != model2.PEPOCH.value:
             warnings.warn(f"Different models for start and stop of {self.fname}")
-            fname1 = fname.replace(".txt", "_start.par")
-            model1.write_parfile(fname1, include_info=False)
-            fname2 = fname.replace(".txt", "_stop.par")
-            model2.write_parfile(fname2, include_info=False)
-            parfiles = [fname1, fname2]
+            n_months = max(np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int), 2)
+            models = [
+                get_crab_ephemeris(mjd, ephem=ephem, force_parameters=force_parameters)
+                for mjd in np.linspace(info["mjdstart"], info["mjdstop"], n_months)
+            ]
+            fname_root = fname.replace(".txt", "")
+            current_pepoch = -1.0
+            parfiles = []
+            count = 0
+            for m in models:
+                local_pepoch = m.PEPOCH.value
+                if local_pepoch != current_pepoch:
+                    new_parfile = fname_root + f"_{count:03d}.par"
+                    m.write_parfile(new_parfile)
+                    parfiles.append(new_parfile)
+                    current_pepoch = local_pepoch
+                    count += 1
         else:
             fname1 = fname.replace(".txt", ".par")
             model1.write_parfile(fname1, include_info=False)
@@ -404,9 +518,7 @@ class GetTemplate(luigi.Task):
 
     def run(self):
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
         template_file = get_template(info["source"], info)

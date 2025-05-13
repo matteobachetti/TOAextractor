@@ -2,9 +2,10 @@
 
 # This sub-module is destined for common non-package specific utility
 # functions.
-import io
 import base64
+import io
 import os
+
 from PIL import Image
 
 
@@ -92,9 +93,10 @@ def output_name(filename, version, suffix):
 def encode_image_file(image_file):
     foo = Image.open(image_file)
     # Get image file
-    image_file = open(image_file, "rb")
-
-    foo.thumbnail((576, 192), Image.LANCZOS)
+    # image_file = open(image_file, "rb")
+    width, height = foo.size
+    h_w_ratio = height / width
+    foo.thumbnail((512, int(512 * h_w_ratio)), Image.LANCZOS)
 
     # From https://stackoverflow.com/questions/42503995/
     # how-to-get-a-pil-image-as-a-base64-encoded-string
@@ -108,3 +110,31 @@ def encode_image_file(image_file):
     base64_encoded_result_str = base64_encoded_result_bytes.decode("ascii")
 
     return base64_encoded_result_str
+
+
+def search_substring_in_list(substring, list_of_strings):
+    """
+    Search for a substring in a list of strings.
+
+    Parameters
+    ----------
+    substring : str
+        The substring to search for.
+    list_of_strings : list of str
+        The list of strings to search in.
+
+    Returns
+    -------
+    list
+        A list of strings that contain the substring.
+
+    Examples
+    --------
+    >>> search_substring_in_list('a', ['a', 'b', 'c'])
+    ['a']
+    >>> search_substring_in_list('a', ['a', 'b', 'c', 'ab'])
+    ['a', 'ab']
+    >>> search_substring_in_list('a', ['a', 'b', 'c', 'ab', 'ba'])
+    ['a', 'ab', 'ba']
+    """
+    return [string for string in list_of_strings if substring in string]

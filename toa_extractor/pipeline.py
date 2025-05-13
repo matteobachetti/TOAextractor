@@ -1,33 +1,26 @@
-import numpy as np
+import copy
+
 import luigi
+import matplotlib.pyplot as plt
+import numpy as np
 import yaml
 from astropy import log
 from astropy.table import Table
-
-from stingray.pulse.pulsar import get_model
 from hendrics.ml_timing import ml_pulsefit, normalized_template
 
-from pulse_deadtime_fix.core import _create_weights
-
-import matplotlib.pyplot as plt
-
-from .utils import output_name, encode_image_file
-from .utils.data_manipulation import get_events_from_fits
-from .utils.config import load_yaml_file
-from .utils.fold import calculate_profile, get_phase_func_from_ephemeris_file
-from .utils.fit_crab_profiles import (
-    create_template_from_profile_table,
-    _plot_profile_and_fit,
-    default_crab_model,
-)
 from .data_setup import (
     GetInfo,
-    GetParfile,
-    GetTemplate,
-    # GetPulseFreq,
     GetPhaseogram,
-    _plot_phaseogram,
+    GetTemplate,
     _get_and_normalize_phaseogram,
+    _plot_phaseogram,
+)
+from .utils import encode_image_file, output_name, search_substring_in_list
+from .utils.config import load_yaml_file
+from .utils.fit_crab_profiles import (
+    _plot_profile_and_fit,
+    create_template_from_profile_table,
+    default_crab_model,
 )
 
 
@@ -45,6 +38,7 @@ def plot_complete_diagnostics(
     phases = phaseograms[0].meta["phase"]
     profile = 0.0
     profile_raw = 0.0
+    durations = []
     for phaseogram_table in phaseograms:
         phaseogram = phaseogram_table["profile"]
         local_profile = np.sum(phaseogram, axis=0)
@@ -52,8 +46,12 @@ def plot_complete_diagnostics(
         if "expo" in phaseogram_table.meta:
             expo = phaseogram_table.meta["expo"]
             local_profile = local_profile / expo
+        durations.append(
+            phaseogram_table.meta["mjdstop"] - phaseogram_table.meta["mjdstart"]
+        )
         profile += local_profile
 
+    durations = np.array(durations)
     if phase_max is None:
         phase_max = 0
 
@@ -63,13 +61,37 @@ def plot_complete_diagnostics(
         if profile_raw is not None:
             profile_raw = np.concatenate([profile_raw, profile_raw, profile_raw])
 
-    fig = plt.figure(figsize=(10, 3 + 3 * n_phas_rows), layout="constrained")
     # External GridSpec
+    if n_phas_rows < 3:
+        height_ratios = [0.65, 0.35] + [1] * n_phas_rows
+        hspace = 0.1
+    else:
+        max_height = 1 * np.log2(n_phas_rows) / n_phas_rows
+        height_scale = durations / durations.max() * max_height
+        height_ratios = [0.65, 0.35] + list(height_scale)
+        hspace = 0
+
+    figure_width = 10
+    figure_height = 3 * np.sum(height_ratios)
+
+    fig = plt.figure(figsize=(figure_width, figure_height))
+    padding_border = 0.001
+    padding_width = 0.075
+    rescale_height = figure_width / figure_height
+
     gs_external = fig.add_gridspec(
         2 + n_phas_rows,
         3,
         width_ratios=[2, 1, 1],
-        height_ratios=[0.65, 0.35] + [1] * n_phas_rows,
+        height_ratios=height_ratios,
+        hspace=hspace,
+        wspace=0.05,
+    )
+    plt.subplots_adjust(
+        left=padding_width,
+        right=1 - padding_border,
+        top=1 - padding_border * rescale_height,
+        bottom=padding_width * rescale_height,
     )
 
     axes_full_profile = [fig.add_subplot(gs_external[i, 0]) for i in range(2)]
@@ -96,7 +118,7 @@ def plot_complete_diagnostics(
             meantime_mjd,
             axrow[0],
             title=None,
-            label_y=True,
+            label_y=n_phas_rows < 3,
         )
         for ax in axrow[1:]:
             _plot_phaseogram(
@@ -137,7 +159,15 @@ def plot_complete_diagnostics(
 
     for ax in [axes_full_profile[1], axes_zoom_peak1[1], axes_zoom_peak2[1]]:
         plt.setp(ax.get_xticklabels(), visible=False)
+
+    if n_phas_rows > 2:
+        for ax_row in axes_all_phaseograms[:-1]:
+            for ax in ax_row:
+                ax.xaxis.label.set_visible(False)
+                plt.setp(ax.get_xticklabels(), visible=False)
+
     for ax in axes_all_phaseograms[-1]:
+        ax.xaxis.label.set_visible(True)
         ax.set_xlabel("Pulse Phase")
         ax.axvline(0, ls="--", color="k")
 
@@ -147,8 +177,10 @@ def plot_complete_diagnostics(
     axes_full_profile[0].set_ylabel("Counts")
     axes_full_profile[1].set_ylabel("Residuals")
     axes_zoom_peak2[0].legend()
+
     if output_fname is not None:
         plt.savefig(output_fname, dpi=150)
+        plt.close(fig)
     else:
         plt.show()
 
@@ -166,15 +198,12 @@ class TOAPipeline(luigi.Task):
         yield GetProfileFit(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
-        # yield GetPulseFreq(
-        #     self.fname, self.config_file, self.version, self.worker_timeout
-        # )
         yield GetPhaseogram(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
 
     def output(self):
-        return luigi.LocalTarget(output_name(self.fname, self.version, "_results.yaml"))
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_results.txt"))
 
     def run(self):
         residual_file = (
@@ -182,7 +211,7 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
-        image_file = (
+        image_files_list = (
             PlotDiagnostics(
                 self.fname, self.config_file, self.version, self.worker_timeout
             )
@@ -196,13 +225,11 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
-        # best_freq_file = (
-        #     GetPulseFreq(
-        #         self.fname, self.config_file, self.version, self.worker_timeout
-        #     )
-        #     .output()
-        #     .path
-        # )
+        image_files = list(
+            filter(None, open(image_files_list, "r").read().splitlines())
+        )
+        image_file = image_files[0]
+
         residual_dict = load_yaml_file(residual_file)
         profile_fit_table = Table.read(profile_fit_file)
         # best_freq_table = Table.read(best_freq_file)
@@ -215,18 +242,40 @@ class TOAPipeline(luigi.Task):
             profile_fit_table.meta["phase_max_err"] / profile_fit_table.meta["F0"]
         )
 
-        residual_dict["img"] = encode_image_file(image_file)
-        # residual_dict["phas_img"] = encode_image_file(phas_image_file)
+        outfile = self.output().path.replace(".txt", ".yaml")
 
-        # residual_dict["local_best_freq"] = float(best_freq_table["f"][0])
-        # residual_dict["local_best_freq_err_n"] = float(best_freq_table["f_err_n"][0])
-        # residual_dict["local_best_freq_err_p"] = float(best_freq_table["f_err_p"][0])
-        # residual_dict["initial_freq_estimate"] = float(
-        #     best_freq_table["initial_freq_estimate"][0]
-        # )
+        output_files = [outfile]
+
+        if "profile_1" in profile_fit_table.colnames:
+            for col in profile_fit_table.colnames:
+                if not col.startswith("profile_") or "raw" in col:
+                    continue
+                label = col.replace("profile", "")
+                meta = profile_fit_table[col].meta
+                local_residual_dict = copy.deepcopy(residual_dict)
+                local_residual_dict.update(meta)
+                local_residual_dict["fit_residual"] = meta["phase_max"] / meta["F0"]
+                local_residual_dict["fit_residual_err"] = (
+                    meta["phase_max_err"] / meta["F0"]
+                )
+                local_image_file = search_substring_in_list(
+                    label + ".jpg", image_files
+                )[0]
+                local_residual_dict["img"] = encode_image_file(local_image_file)
+                outfile = self.output().path.replace(".txt", f"{label}.yaml")
+
+                with open(outfile, "w") as f:
+                    yaml.dump(local_residual_dict, f)
+
+                output_files.append(outfile)
+
+        residual_dict["img"] = encode_image_file(image_file)
+        with open(outfile, "w") as f:
+            yaml.dump(residual_dict, f)
 
         with open(self.output().path, "w") as f:
-            yaml.dump(residual_dict, f)
+            for outfile in output_files:
+                print(outfile, file=f)
 
 
 class PlotDiagnostics(luigi.Task):
@@ -251,7 +300,7 @@ class PlotDiagnostics(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_diagnostics.jpg")
+            output_name(self.fname, self.version, "_diagnostics.txt")
         )
 
     def run(self):
@@ -277,12 +326,45 @@ class PlotDiagnostics(luigi.Task):
         )
         phaseograms = open(phaseogram_file).read().splitlines()
 
+        root = self.output().path.replace(".txt", "")
+        outfile = root + ".jpg"
         plot_complete_diagnostics(
             phaseograms,
             model_fit=best_fit_model,
             model_init=init_model,
-            output_fname=self.output().path,
+            output_fname=outfile,
         )
+        outfiles = [outfile]
+        if "profile_1" in profile_fit_table.colnames:
+            for col in profile_fit_table.colnames:
+                if not col.startswith("profile_") or "raw" in col:
+                    continue
+
+                label = col.replace("profile", "")
+
+                init_model = default_crab_model(
+                    init_pars=profile_fit_table[col].meta["model_init"]
+                )
+                best_fit_model = default_crab_model(
+                    init_pars=profile_fit_table[col].meta["best_fit"]
+                )
+                local_phaseograms = search_substring_in_list(
+                    label + ".hdf5",
+                    phaseograms,
+                )
+
+                outfile = root + label + ".jpg"
+                plot_complete_diagnostics(
+                    local_phaseograms,
+                    model_fit=best_fit_model,
+                    model_init=init_model,
+                    output_fname=outfile,
+                )
+                outfiles.append(outfile)
+
+        with open(self.output().path, "w") as f:
+            for outfile in outfiles:
+                print(outfile, file=f)
 
 
 class GetResidual(luigi.Task):
@@ -387,10 +469,7 @@ class GetFoldedProfile(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetParfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetTemplate(
+        yield GetPhaseogram(
             self.fname, self.config_file, self.version, self.worker_timeout
         )
 
@@ -398,95 +477,67 @@ class GetFoldedProfile(luigi.Task):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_folded.hdf5"))
 
     def run(self):
-        infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
-        )
-        info = load_yaml_file(infofile)
-        events = get_events_from_fits(self.fname)
-        ephem = info["ephem"]
-        mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
-        parfile_list = (
-            GetParfile(
-                self.fname,
-                self.config_file,
-                self.version,
-                worker_timeout=self.worker_timeout,
+        phaseogram_file = (
+            GetPhaseogram(
+                self.fname, self.config_file, self.version, self.worker_timeout
             )
             .output()
             .path
         )
-        # Read list of file ignoring blank lines
-        parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
-        models = [get_model(p) for p in parfiles]
-        epochs = np.asarray([m.PEPOCH.value for m in models])
-        mjd_edges = [mjdstart, mjdstop]
-        if len(set(epochs)) > 1:
-            additional_mjd_edges = (epochs[1:] + epochs[:-1]) / 2
-            mjd_edges = np.concatenate([[mjdstart], additional_mjd_edges, [mjdstop]])
+        phaseogram_files = open(phaseogram_file).read().splitlines()
 
-        mjds = events.time / 86400 + events.mjdref
-        nbin = 512
-        edge_idxs = np.searchsorted(mjds, mjd_edges)
+        phaseograms = []
+        for phaseogram in phaseogram_files:
+            phaseograms.append(Table.read(phaseogram))
+
+        phases = phaseograms[0].meta["phase"]
+        profile = 0.0
+        profile_raw = 0.0
 
         result_table = Table()
-        for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
-            correction_fun = get_phase_func_from_ephemeris_file(
-                mjdstart,
-                mjdstop,
-                parfiles[i],
-                ephem=ephem,
-                return_sec_from_mjdstart=True,
+        for subprofile_count, phaseogram_table in enumerate(phaseograms):
+            phaseogram = phaseogram_table["profile"]
+            local_profile_raw = np.sum(phaseogram, axis=0)
+            profile_raw += local_profile_raw
+            if "expo" in phaseogram_table.meta:
+                expo = phaseogram_table.meta["expo"]
+                local_profile = local_profile_raw / expo
+            else:
+                local_profile = local_profile_raw
+
+            if "phase" not in result_table.colnames:
+                result_table["phase"] = phases
+                result_table.meta.update(phaseogram_table.meta)
+
+            result_table[f"profile_{subprofile_count}"] = local_profile
+            result_table[f"profile_raw_{subprofile_count}"] = local_profile_raw
+            result_table[f"profile_{subprofile_count}"].meta.update(
+                phaseogram_table.meta
             )
 
-            good = slice(edge_idxs[i], edge_idxs[i + 1])
-            times_from_mjdstart = events.time[good] - (mjdstart - events.mjdref) * 86400
-            phase = correction_fun(times_from_mjdstart)
+            profile += local_profile
 
-            expo = None
-            if hasattr(events, "prior") and (
-                np.any(events.prior != 0) or np.any(np.isnan(events.prior))
-            ):
-                phases_livetime_start = correction_fun(
-                    times_from_mjdstart - events.prior[good]
-                )
-                phase_edges = np.linspace(0, 1, nbin + 1)
-                weights = _create_weights(
-                    phases_livetime_start.astype(float),
-                    phase.astype(float),
-                    phase_edges,
-                )
-                expo = 1 / weights
+        if subprofile_count == 0:
+            log.info("Only one profile found in the observation")
+            result_table.rename_column("profile_0", "profile")
+        else:
+            log.info("Creating summed profile")
+            result_table["profile"] = np.sum(
+                [result_table[f"profile_{i}"] for i in range(len(phaseograms))], axis=0
+            )
+            result_table["profile_raw"] = np.sum(
+                [result_table[f"profile_raw_{i}"] for i in range(len(phaseograms))],
+                axis=0,
+            )
 
-            phase -= np.floor(phase)
-
-            model = get_model(parfiles[i])
-            table = calculate_profile(phase, nbin=nbin, expo=expo)
-            if "phase" not in result_table.colnames:
-                result_table["phase"] = table["phase"]
-                result_table.meta["F0"] = model.F0.value
-            result_table[f"profile_{i}"] = table["profile"]
-            result_table[f"profile_raw_{i}"] = table["profile_raw"]
-
-            result_table[f"profile_{i}"].meta["F0"] = model.F0.value
-            result_table[f"profile_{i}"].meta["F1"] = model.F1.value
-            result_table[f"profile_{i}"].meta["F2"] = model.F2.value
-
-        result_table["profile"] = np.sum(
-            [result_table[f"profile_{i}"] for i in range(len(parfiles))], axis=0
-        )
-        result_table["profile_raw"] = np.sum(
-            [result_table[f"profile_raw_{i}"] for i in range(len(parfiles))], axis=0
-        )
-
-        result_table.write(self.output().path)
+        result_table.write(self.output().path, serialize_meta=True)
 
 
 def get_outputs(task):
     """Get all outputs from a given luigi task and his dependencies."""
     outputs = []
     local_require = task
+
     while 1:
         try:
             outputs.append(local_require.output().path)
