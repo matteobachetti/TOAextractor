@@ -68,6 +68,7 @@ def split_gtis_at_times_and_exposure(gti, times, max_exposure=np.inf):
     >>> assert np.allclose(res[2], np.array([[20, 25]]))
     >>> assert np.allclose(res[3], np.array([[25, 30]]))
     """
+
     duration = np.sum(gti[:, 1] - gti[:, 0])
 
     if duration < max_exposure and len(times) == 0:
@@ -209,6 +210,8 @@ class GetPhaseogram(luigi.Task):
         )
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
         current_gtis = fitsreader.gti
+        if current_gtis is None:
+            current_gtis = np.array([[0, fitsreader.time[-1] - fitsreader.time[0]]])
 
         obs_will_be_split = False
         split_at_edges = []
