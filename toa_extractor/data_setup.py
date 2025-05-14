@@ -212,6 +212,9 @@ class GetPhaseogram(luigi.Task):
         current_gtis = fitsreader.gti
         if current_gtis is None:
             current_gtis = np.array([[0, fitsreader.time[-1] - fitsreader.time[0]]])
+            fitsreader.gti = current_gtis
+
+        print(current_gtis)
 
         obs_will_be_split = False
         split_at_edges = []
