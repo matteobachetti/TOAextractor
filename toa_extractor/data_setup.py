@@ -211,7 +211,7 @@ class GetPhaseogram(luigi.Task):
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
         current_gtis = fitsreader.gti
         if current_gtis is None:
-            current_gtis = np.array([[0, fitsreader.time[-1] - fitsreader.time[0]]])
+            current_gtis = np.array([[fitsreader.time[0], fitsreader.time[-1]]])
             fitsreader.gti = current_gtis
 
         print(current_gtis)
