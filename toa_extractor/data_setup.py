@@ -310,10 +310,11 @@ class GetPhaseogram(luigi.Task):
             result_table.meta["F0"] = model.F0.value
             result_table.meta["F1"] = model.F1.value
             result_table.meta["F2"] = model.F2.value
+            result_table.meta["PEPOCH"] = model.PEPOCH.value
             result_table.meta["mjdref"] = events.mjdref
             result_table.meta["mjdstart"] = mjdstart
             result_table.meta["mjdstop"] = mjdstop
-            result_table.meta["mjd"] = model.PEPOCH.value
+            result_table.meta["mjd"] = (mjdstop + mjdstart) / 2
 
             new_file_name = output_name(
                 self.fname, self.version, f"_dynprof_{subprofile_count:000d}.hdf5"

@@ -255,19 +255,15 @@ class TOAPipeline(luigi.Task):
                 local_residual_dict = copy.deepcopy(residual_dict)
                 local_residual_dict.update(meta)
                 local_residual_dict["fit_residual"] = meta["phase_max"] / meta["F0"]
-                local_residual_dict["fit_residual_err"] = (
-                    meta["phase_max_err"] / meta["F0"]
-                )
-                local_image_file = search_substring_in_list(
-                    label + ".jpg", image_files
-                )[0]
+                local_residual_dict["fit_residual_err"] = meta["phase_max_err"] / meta["F0"]
+                local_image_file = search_substring_in_list(label + ".jpg", image_files)[0]
                 local_residual_dict["img"] = encode_image_file(local_image_file)
-                outfile = self.output().path.replace(".txt", f"{label}.yaml")
+                local_outfile = self.output().path.replace(".txt", f"{label}.yaml")
 
-                with open(outfile, "w") as f:
+                with open(local_outfile, "w") as f:
                     yaml.dump(local_residual_dict, f)
 
-                output_files.append(outfile)
+                output_files.append(local_outfile)
 
         residual_dict["img"] = encode_image_file(image_file)
         with open(outfile, "w") as f:
