@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from astropy import units as u
+from astropy.time import Time
 from astropy.table import Table
 from bokeh.models import (
     BoxAnnotation,
@@ -49,14 +50,14 @@ def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual")
 
     df["MJD_int"] = df["mjd"].astype(int)
 
-    df["mission+instr"] = [
-        f"{m}/{ins.upper()}" for m, ins in zip(df["mission"], df["instrument"])
-    ]
-    df["mission+ephem"] = [
-        f"{m}-{e.upper()}" for m, e in zip(df["mission+instr"], df["ephem"])
-    ]
+    df["mission+instr"] = [f"{m}/{ins.upper()}" for m, ins in zip(df["mission"], df["instrument"])]
+    df["mission+ephem"] = [f"{m}-{e.upper()}" for m, e in zip(df["mission+instr"], df["ephem"])]
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
     mission_instr_combs = sorted(list(set(df["mission+instr"])))
+
+    df["date_ut"] = [
+        Time(mjd, format="mjd").to_datetime().strftime("UT %Y-%m-%d") for mjd in df["mjd"]
+    ]
 
     if len(mission_instr_combs) == len(mission_ephem_combs):
         mission_ephem_combs = mission_instr_combs
@@ -236,6 +237,9 @@ def plot_residuals(
             <span>ObsID @obsid</span>
         </div>
         <div>
+            <span>@date_ut</span>
+        </div>
+        <div>
             <span>@fname</span>
         </div>
         <div>
@@ -357,14 +361,13 @@ def plot_residuals(
 
 def main(args=None):
     import argparse
+    from astropy.time import Time
 
     parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
 
     parser.add_argument("file", help="Input summary CSV file", type=str)
     parser.add_argument("--test", action="store_true", default=False)
-    parser.add_argument(
-        "-o", "--output", help="Output file name", type=str, default=None
-    )
+    parser.add_argument("-o", "--output", help="Output file name", type=str, default=None)
     parser.add_argument(
         "-r",
         "--residual",
