@@ -46,9 +46,7 @@ def plot_complete_diagnostics(
         if "expo" in phaseogram_table.meta:
             expo = phaseogram_table.meta["expo"]
             local_profile = local_profile / expo
-        durations.append(
-            phaseogram_table.meta["mjdstop"] - phaseogram_table.meta["mjdstart"]
-        )
+        durations.append(phaseogram_table.meta["mjdstop"] - phaseogram_table.meta["mjdstart"])
         profile += local_profile
 
     durations = np.array(durations)
@@ -100,17 +98,12 @@ def plot_complete_diagnostics(
 
     axes_all_profiles = [axes_full_profile, axes_zoom_peak1, axes_zoom_peak2]
     axes_all_phaseograms = [
-        [
-            fig.add_subplot(gs_external[i + 2, j], sharex=axes_all_profiles[j][0])
-            for j in range(3)
-        ]
+        [fig.add_subplot(gs_external[i + 2, j], sharex=axes_all_profiles[j][0]) for j in range(3)]
         for i in range(n_phas_rows)
     ]
 
     for phaseogram, axrow in zip(phaseogram_files, axes_all_phaseograms):
-        local_phases, time_hrs, phas, meantime_mjd = _get_and_normalize_phaseogram(
-            phaseogram
-        )
+        local_phases, time_hrs, phas, meantime_mjd = _get_and_normalize_phaseogram(phaseogram)
         _plot_phaseogram(
             local_phases,
             time_hrs,
@@ -192,15 +185,9 @@ class TOAPipeline(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield PlotDiagnostics(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetProfileFit(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetPhaseogram(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        yield PlotDiagnostics(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetProfileFit(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetPhaseogram(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_results.txt"))
@@ -212,22 +199,16 @@ class TOAPipeline(luigi.Task):
             .path
         )
         image_files_list = (
-            PlotDiagnostics(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
+            PlotDiagnostics(self.fname, self.config_file, self.version, self.worker_timeout)
             .output()
             .path
         )
         profile_fit_file = (
-            GetProfileFit(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
+            GetProfileFit(self.fname, self.config_file, self.version, self.worker_timeout)
             .output()
             .path
         )
-        image_files = list(
-            filter(None, open(image_files_list, "r").read().splitlines())
-        )
+        image_files = list(filter(None, open(image_files_list, "r").read().splitlines()))
         image_file = image_files[0]
 
         residual_dict = load_yaml_file(residual_file)
@@ -281,45 +262,29 @@ class PlotDiagnostics(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetResidual(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetFoldedProfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetProfileFit(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
-        yield GetPhaseogram(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        yield GetResidual(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetProfileFit(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetPhaseogram(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_diagnostics.txt")
-        )
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_diagnostics.txt"))
 
     def run(self):
         profile_fit_file = (
-            GetProfileFit(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
+            GetProfileFit(self.fname, self.config_file, self.version, self.worker_timeout)
             .output()
             .path
         )
         phaseogram_file = (
-            GetPhaseogram(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
+            GetPhaseogram(self.fname, self.config_file, self.version, self.worker_timeout)
             .output()
             .path
         )
         profile_fit_table = Table.read(profile_fit_file)
 
         init_model = default_crab_model(init_pars=profile_fit_table.meta["model_init"])
-        best_fit_model = default_crab_model(
-            init_pars=profile_fit_table.meta["best_fit"]
-        )
+        best_fit_model = default_crab_model(init_pars=profile_fit_table.meta["best_fit"])
         phaseograms = open(phaseogram_file).read().splitlines()
 
         root = self.output().path.replace(".txt", "")
@@ -338,9 +303,7 @@ class PlotDiagnostics(luigi.Task):
 
                 label = col.replace("profile", "")
 
-                init_model = default_crab_model(
-                    init_pars=profile_fit_table[col].meta["model_init"]
-                )
+                init_model = default_crab_model(init_pars=profile_fit_table[col].meta["model_init"])
                 best_fit_model = default_crab_model(
                     init_pars=profile_fit_table[col].meta["best_fit"]
                 )
@@ -370,20 +333,14 @@ class GetResidual(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetFoldedProfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        return GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_residual.yaml")
-        )
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_residual.yaml"))
 
     def run(self):
         prof_file = (
-            GetFoldedProfile(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
+            GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
             .output()
             .path
         )
@@ -397,9 +354,7 @@ class GetResidual(luigi.Task):
         template_table = Table.read(template_file, format="ascii.ecsv")
 
         infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout)
-            .output()
-            .path
+            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
 
@@ -433,20 +388,14 @@ class GetProfileFit(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetFoldedProfile(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        return GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(
-            output_name(self.fname, self.version, "_fit_template.hdf5")
-        )
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_fit_template.hdf5"))
 
     def run(self):
         prof_file = (
-            GetFoldedProfile(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
+            GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
             .output()
             .path
         )
@@ -465,18 +414,14 @@ class GetFoldedProfile(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        yield GetPhaseogram(
-            self.fname, self.config_file, self.version, self.worker_timeout
-        )
+        yield GetPhaseogram(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_folded.hdf5"))
 
     def run(self):
         phaseogram_file = (
-            GetPhaseogram(
-                self.fname, self.config_file, self.version, self.worker_timeout
-            )
+            GetPhaseogram(self.fname, self.config_file, self.version, self.worker_timeout)
             .output()
             .path
         )
@@ -507,9 +452,7 @@ class GetFoldedProfile(luigi.Task):
 
             result_table[f"profile_{subprofile_count}"] = local_profile
             result_table[f"profile_raw_{subprofile_count}"] = local_profile_raw
-            result_table[f"profile_{subprofile_count}"].meta.update(
-                phaseogram_table.meta
-            )
+            result_table[f"profile_{subprofile_count}"].meta.update(phaseogram_table.meta)
 
             profile += local_profile
 

@@ -214,8 +214,6 @@ class GetPhaseogram(luigi.Task):
             current_gtis = np.array([[fitsreader.time[0], fitsreader.time[-1]]])
             fitsreader.gti = current_gtis
 
-        print(current_gtis)
-
         obs_will_be_split = False
         split_at_edges = []
         if len(set(model_epochs_met)) > 1:
