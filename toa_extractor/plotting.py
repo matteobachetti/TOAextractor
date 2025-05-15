@@ -361,7 +361,6 @@ def plot_residuals(
 
 def main(args=None):
     import argparse
-    from astropy.time import Time
 
     parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
 
