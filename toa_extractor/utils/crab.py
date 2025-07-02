@@ -101,21 +101,17 @@ def get_best_txt_ephemeris(mjd):
     return result
 
 
-def get_model_str(
-    ephem, F0, F1, F2, TZRMJD, START, FINISH, include_proper_motion=False
-):
+def get_model_str(ephem, F0, F1, F2, TZRMJD, START, FINISH, include_proper_motion=False):
     coords = crab_coords
 
     if isinstance(TZRMJD, str):
         pepoch = TZRMJD.split(".")[0]
     else:
         pepoch = int(float(TZRMJD))
-    ra = ":".join([f"{v:g}" for v in coords.ra.hms])
-    dec = ":".join([f"{v:g}" for v in coords.dec.dms])
 
     model_str = rf"""PSRJ            J0534+2200
-    RAJ              {ra}
-    DECJ             {dec}
+    RAJ              {coords.ra.to_string(unit=u.hour, sep=':')}
+    DECJ             {coords.dec.to_string(unit=u.deg, sep=':')}
     POSEPOCH         40706
     PEPOCH           {pepoch}
     F0               {F0} 1
@@ -171,11 +167,7 @@ def refit_solution(
         log.info("Forcing parameters:")
         for key, val in force_parameters.items():
             log.info(f"{key} = {val}")
-            if (
-                not isinstance(val, Iterable)
-                or isinstance(val, str)
-                or isinstance(val, u.Quantity)
-            ):
+            if not isinstance(val, Iterable) or isinstance(val, str) or isinstance(val, u.Quantity):
                 val = [val]
             par = getattr(model_new_start, key)
             par.quantity = val[0]
