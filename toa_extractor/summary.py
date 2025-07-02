@@ -10,9 +10,7 @@ def main(args=None):
     parser = argparse.ArgumentParser(description="Create summary table for toaextract")
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
-    parser.add_argument(
-        "-o", "--output", help="Output file name", type=str, default="summary.csv"
-    )
+    parser.add_argument("-o", "--output", help="Output file name", type=str, default="summary.csv")
 
     args = parser.parse_args(args)
 
@@ -25,7 +23,8 @@ def main(args=None):
                 del new_info[arr]
 
         newtab = pd.DataFrame(new_info)
-
+        if len(newtab) == 0:
+            continue
         if result_table is None:
             result_table = newtab
         else:
