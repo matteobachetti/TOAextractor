@@ -12,6 +12,8 @@ def get_toa_stats(summary_fname):
     table = Table.read(summary_fname)
 
     table_groups = table.group_by(["mission", "instrument"])
+    lines = []
+
     for subtable in table_groups.groups:
         mission = subtable["mission"][0]
         instrument = subtable["instrument"][0]
@@ -42,7 +44,26 @@ def get_toa_stats(summary_fname):
         print(f"Standard dev: {np.nanstd(subsubtable_aggr['fit_residual']):.6f}")
         print(f"Mean stat err: {np.nanmean(subsubtable_aggr['fit_residual_err']):.6f}")
         print(f"Inter-ephem std: {np.nanmean(subsubtable_aggr['ephem_std']):.6f}")
+        mission = subsubtable_aggr["mission"][0]
+        instrument = subsubtable_aggr["instrument"][0]
+        mean_residual =  np.nanmean(subsubtable_aggr["fit_residual"])
+        std_residual = np.nanstd(subsubtable_aggr["fit_residual"])
+        mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
+        inter_ephem_std = np.nanmean(subsubtable_aggr["ephem_std"])
 
+        lines.append([
+            mission,
+            instrument,
+            len(subsubtable_aggr),
+            float(f"{mean_residual * 1e6:.1e}"),
+            float(f"{std_residual * 1e6:.1e}"),
+            float(f"{mean_stat_err * 1e6:.1e}"),
+            float(f"{inter_ephem_std * 1e6:.1e}"),
+            ])
+
+    final_table = Table(rows=lines, names=["mission", "instrument", "n_obs", "mean_residual (us)", "std_residual (us)", "mean_stat_err (us)", "inter_ephem_std (us)"])
+    print("\nSummary of TOA statistics:")
+    final_table.pprint()
 
 
 
