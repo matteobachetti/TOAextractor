@@ -32,9 +32,10 @@ def test_get_toa_stats():
     from toa_extractor.toa_stats import get_toa_stats
 
     outfname = "test_out_stats.csv"
+    out_tex_fname = outfname.replace("csv", "tex")
     # Call the function to test
     table = get_toa_stats(
-        summary_fname, out_fname=outfname, out_tex_fname=outfname.replace("csv", "tex")
+        summary_fname, out_fname=outfname, out_tex_fname=out_tex_fname
     )
     assert len(table) == 3
     assert "Mission" in table.colnames
@@ -49,7 +50,9 @@ def test_get_toa_stats():
 
     # Check if the summary file was created and read correctly
     assert os.path.exists(outfname)
+    assert os.path.exists(out_tex_fname)
 
     # Clean up
-    os.unlink(outfname)  # Remove the fake summary file after the test
-    os.unlink(summary_fname)  # Remove the fake summary file after the test
+    os.unlink(outfname)
+    os.unlink(out_tex_fname)
+    os.unlink(summary_fname)
