@@ -120,6 +120,7 @@ def get_model_str(ephem, F0, F1, F2, TZRMJD, START, FINISH, include_proper_motio
     EPHEM            {ephem}
     UNITS TDB
     CLOCK TT(TAI)
+    PHOFF            0 1
     TZRFRQ           0
     TZRMJD           {TZRMJD}
     TZRSITE 0
@@ -177,7 +178,7 @@ def refit_solution(
                 par.uncertainty = val[2]
     # Create a bunch of geocenter TOAs with the original DE200 model
     fake_geo_toas = pint.simulation.make_fake_toas_uniform(
-        t0_mjd, t1_mjd, 101, model_200, freq=np.inf
+        t0_mjd, t1_mjd, 101, model_200, freq=np.inf, error=0.5 * u.us, add_noise=True
     )
     fake_geo_toas.ephem = new_ephem
     # fake_geo_toas.compute_TDBs(ephem=new_ephem)
@@ -185,7 +186,7 @@ def refit_solution(
     # Initial residuals
 
     # Use the fake TOAs to fit the model with the new ephemeris
-    f = pint.fitter.WLSFitter(fake_geo_toas, model_new_start)
+    f = pint.fitter.DownhillWLSFitter(fake_geo_toas, model_new_start)
     f.fit_toas()  # fit_toas() returns the final reduced chi squared
 
     rms = f.resids.rms_weighted()
@@ -231,6 +232,7 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None):
         include_proper_motion=False,
         force_parameters=force_parameters,
     )
+    fit_model.PHOFF.value = 0
     fit_model.write_parfile(fname, include_info=False)
 
     return fit_model
