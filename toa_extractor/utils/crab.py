@@ -178,7 +178,7 @@ def refit_solution(
                 par.uncertainty = val[2]
     # Create a bunch of geocenter TOAs with the original DE200 model
     fake_geo_toas = pint.simulation.make_fake_toas_uniform(
-        t0_mjd, t1_mjd, 101, model_200, freq=np.inf, error=0.1 * u.us, add_noise=True
+        t0_mjd, t1_mjd, 101, model_200, freq=np.inf, error=0.5 * u.us, add_noise=True
     )
     fake_geo_toas.ephem = new_ephem
     # fake_geo_toas.compute_TDBs(ephem=new_ephem)
