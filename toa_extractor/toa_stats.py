@@ -4,7 +4,9 @@ from scipy.stats import median_abs_deviation
 from astropy.table import Table, vstack
 
 
-def get_toa_stats(summary_fname, out_fname="toa_stats_summary.csv", out_tex_fname="toa_stats_summary.tex"):
+def get_toa_stats(
+    summary_fname, out_fname="toa_stats_summary.csv", out_tex_fname="toa_stats_summary.tex"
+):
     """
     Get the TOA statistics from the summary file.
     """
@@ -76,15 +78,15 @@ def get_toa_stats(summary_fname, out_fname="toa_stats_summary.csv", out_tex_fnam
             ]
         )
 
-    names =[
-            "Mission",
-            "Instrument",
-            "$N$",
-            r"$r_{\rm mean}$ (us)",
-            r"$\sigma$ (us)",
-            r"$\sigma_{\rm stat}$ (us)",
-            r"$\sigma_{\rm ephem}$ (us)",
-        ]
+    names = [
+        "Mission",
+        "Instrument",
+        "$N$",
+        r"$r_{\rm mean}$ (us)",
+        r"$\sigma$ (us)",
+        r"$\sigma_{\rm stat}$ (us)",
+        r"$\sigma_{\rm ephem}$ (us)",
+    ]
     final_table = Table(
         rows=lines,
         names=names,
