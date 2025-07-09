@@ -19,9 +19,7 @@ def get_toa_stats(summary_fname):
         mission = subtable["mission"][0]
         instrument = subtable["instrument"][0]
         print(mission)
-        # print(subtable["obsid", "mjd", "ephem", "fit_residual", "fit_residual_err"])
         subtable = subtable.group_by(["obsid", "mjd", "ephem"]).groups.aggregate(np.mean)
-        # print(subtable["obsid", "mjd", "ephem", "fit_residual", "fit_residual_err"])
         subsubtable_list = []
         ephem_diff = []
         for subsub in subtable.group_by(["obsid", "mjd"]).groups:
@@ -39,7 +37,10 @@ def get_toa_stats(summary_fname):
         subsubtable_aggr["ephem_std"] = ephem_diff
 
         print(subsubtable_aggr["obsid", "mjd", "fit_residual", "fit_residual_err", "ephem_std"])
-        print(f"*** Results for mission {subsubtable_aggr['mission'][0]} and instrument {subsubtable_aggr['instrument'][0]} ***")
+        print(
+            f"*** Results for mission {subsubtable_aggr['mission'][0]} and "
+            "instrument {subsubtable_aggr['instrument'][0]} ***"
+        )
         print(f"Number of observations: {len(subsubtable_aggr)}")
         print(f"Mean residual: {np.nanmean(subsubtable_aggr['fit_residual']):.6f}")
         print(f"Standard dev: {np.nanstd(subsubtable_aggr['fit_residual']):.6f}")
@@ -50,35 +51,43 @@ def get_toa_stats(summary_fname):
         n_meas = len(subsubtable_aggr)
         if n_meas < 3:
             mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
-            std_residual = inter_ephem_std = np.nan
+            std_residual = np.nan
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
         elif n_meas > 20:
             mean_residual = np.median(subsubtable_aggr["fit_residual"])
             std_residual = median_abs_deviation(subsubtable_aggr["fit_residual"], scale="normal")
             mean_stat_err = np.median(subsubtable_aggr["fit_residual_err"])
-            inter_ephem_std = np.median(subsubtable_aggr["ephem_std"])
         else:
-            mean_residual =  np.nanmean(subsubtable_aggr["fit_residual"])
+            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
             std_residual = np.nanstd(subsubtable_aggr["fit_residual"])
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
-            inter_ephem_std = np.nanmean(subsubtable_aggr["ephem_std"])
 
-        lines.append([
-            mission.upper(),
-            instrument.upper(),
-            n_meas,
-            float(f"{mean_residual * 1e6:.1e}"),
-            float(f"{std_residual * 1e6:.1e}"),
-            float(f"{mean_stat_err * 1e6:.1e}"),
-            # float(f"{inter_ephem_std * 1e6:.1e}"),
-            ])
+        lines.append(
+            [
+                mission.upper(),
+                instrument.upper(),
+                n_meas,
+                float(f"{mean_residual * 1e6:.1e}"),
+                float(f"{std_residual * 1e6:.1e}"),
+                float(f"{mean_stat_err * 1e6:.1e}"),
+                # float(f"{inter_ephem_std * 1e6:.1e}"),
+            ]
+        )
 
-    final_table = Table(rows=lines, names=["Mission", "Instrument", "$N$", "$r_{\rm mean}$ (us)", "$\sigma$  (us)", "$\sigma_{\rm stat}$ (us)"])
+    final_table = Table(
+        rows=lines,
+        names=[
+            "Mission",
+            "Instrument",
+            "$N$",
+            r"$r_{\rm mean}$ (us)",
+            r"$\sigma$  (us)",
+            r"$\sigma_{\rm stat}$ (us)",
+        ],
+    )
     print("\nSummary of TOA statistics:")
     final_table.pprint()
     final_table.write("toa_stats_summary.tex", overwrite=True)
-
-
 
 
 def main(args=None):
