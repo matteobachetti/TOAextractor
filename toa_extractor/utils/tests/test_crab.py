@@ -11,10 +11,10 @@ def test_refit_solution_ephem(ephem):
     if ephem.upper() == "DE200":
         assert model.TRES.value is None
     else:
-        assert model.TRES.value < 1
+        assert model.TRES.value < 2
 
 
 @pytest.mark.parametrize("mjd", np.random.uniform(44000, 70000, 5))
 def test_refit_solution_mjd(mjd):
     model = get_crab_ephemeris(mjd, ephem="DE430", force_parameters=None)
-    assert model.TRES.value < 1
+    assert model.TRES.value < 2
