@@ -8,6 +8,7 @@ from toa_extractor.pipeline import GetResidual, get_outputs
 from toa_extractor.pipeline import main as main_pipe
 from toa_extractor.plotting import main as main_plotting
 from toa_extractor.summary import main as main_summary
+from toa_extractor.toa_stats import main as main_stats
 
 version_label = f"test_{np.random.randint(0, 1000000)}"
 
@@ -36,6 +37,7 @@ class TestPipeline(object):
             + ["--output", f"summary_{version_label}.csv"]
         )
         main_plotting([f"summary_{version_label}.csv", "--test"])
+        main_stats([f"summary_{version_label}.csv"])
 
     @classmethod
     def teardown_class(cls):
