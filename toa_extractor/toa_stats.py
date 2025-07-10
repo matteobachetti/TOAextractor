@@ -103,6 +103,14 @@ def main(args=None):
 
     parser = argparse.ArgumentParser(description="Get TOA statistics from a summary file.")
     parser.add_argument("summary_fname", type=str, help="Path to the summary file.")
+    parser.add_argument("-o", "--output", help="Output file name", type=str, default=None)
     args = parser.parse_args(args)
 
-    get_toa_stats(args.summary_fname)
+    if args.output is None:
+        args.output = args.summary_fname.replace(".csv", "") + "toa_stats.csv"
+
+    get_toa_stats(
+        args.summary_fname,
+        out_fname=args.output,
+        out_tex_fname=args.output.replace("csv", "tex"),
+    )
