@@ -2,6 +2,7 @@ import os
 import numpy as np
 from scipy.stats import median_abs_deviation
 from astropy.table import Table, vstack
+from itertools import combinations
 
 
 def get_toa_stats(
@@ -22,53 +23,60 @@ def get_toa_stats(
     for subtable in table_groups.groups:
         mission = subtable["mission"][0]
         instrument = subtable["instrument"][0]
-        print(mission)
         subtable = subtable.group_by(["obsid", "rough_mjd", "ephem"]).groups.aggregate(np.mean)
         subsubtable_list = []
-        ephem_diff = []
+        ephem_cols = []
         for subsub in subtable.group_by(["obsid", "rough_mjd"]).groups:
             print(subsub["rough_mjd", "ephem", "obsid"])
             if len(subsub) > 1:
-                ephem_diff.append(np.std(subsub["fit_residual"]))
+                combs = list(combinations(set(subsub["ephem"]), 2))
+                diffs = {}
+                for comb in combs:
+                    val  = f"{comb[0]} - {comb[1]}"
+                    comb0 = subsub[subsub["ephem"] == comb[0]]
+                    comb1 = subsub[subsub["ephem"] == comb[1]]
+                    diffs[val] = comb0["fit_residual"][0] - comb1["fit_residual"]
+                    ephem_cols.append(val)
+
             else:
-                ephem_diff.append(np.nan)
+                diffs = {}
             subsubtable = subsub["obsid", "mjd", "rough_mjd", "fit_residual", "fit_residual_err"]
             subsubtable = subsubtable.group_by(["obsid", "rough_mjd"]).groups.aggregate(np.mean)
-            print(subsubtable)
+            for key, val in diffs.items():
+                subsubtable[key] = val
+
             subsubtable["mission"] = [mission] * len(subsubtable)
             subsubtable["instrument"] = [instrument] * len(subsubtable)
             subsubtable_list.append(subsubtable)
 
         subsubtable_aggr = vstack(subsubtable_list)
-        subsubtable_aggr["ephem_std"] = ephem_diff
 
-        print(subsubtable_aggr["obsid", "mjd", "fit_residual", "fit_residual_err", "ephem_std"])
+        columns = ["obsid", "mjd", "fit_residual", "fit_residual_err"] + list(set(ephem_cols))
+        print(subsubtable_aggr[columns])
         print(
             f"*** Results for mission {subsubtable_aggr['mission'][0]} and "
-            "instrument {subsubtable_aggr['instrument'][0]} ***"
+            f"instrument {subsubtable_aggr['instrument'][0]} ***"
         )
         print(f"Number of observations: {len(subsubtable_aggr)}")
         print(f"Mean residual (us): {1e6 * np.nanmean(subsubtable_aggr['fit_residual']):.2f}")
         print(f"Standard dev (us): {1e6 * np.nanstd(subsubtable_aggr['fit_residual']):.2f}")
         print(f"Mean stat err (us): {1e6 * np.nanmean(subsubtable_aggr['fit_residual_err']):.2f}")
-        print(f"Inter-ephem std (us): {1e6 * np.nanmean(subsubtable_aggr['ephem_std']):.2f}")
+
         mission = subsubtable_aggr["mission"][0]
         instrument = subsubtable_aggr["instrument"][0]
         n_meas = len(subsubtable_aggr)
         if n_meas < 3:
             mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
-            std_residual = inter_ephem_std = np.nan
+            std_residual = np.nan
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
         elif n_meas > 20:
             mean_residual = np.median(subsubtable_aggr["fit_residual"])
             std_residual = median_abs_deviation(subsubtable_aggr["fit_residual"], scale="normal")
             mean_stat_err = np.median(subsubtable_aggr["fit_residual_err"])
-            inter_ephem_std = np.nanmean(subsubtable_aggr["ephem_std"])
         else:
             mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
             std_residual = np.nanstd(subsubtable_aggr["fit_residual"])
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
-            inter_ephem_std = np.nanmean(subsubtable_aggr["ephem_std"])
 
         lines.append(
             [
@@ -78,7 +86,6 @@ def get_toa_stats(
                 float(f"{mean_residual * 1e6:.1e}"),
                 float(f"{std_residual * 1e6:.1e}"),
                 float(f"{mean_stat_err * 1e6:.1e}"),
-                float(f"{inter_ephem_std * 1e6:.1e}"),
             ]
         )
 
@@ -89,7 +96,6 @@ def get_toa_stats(
         r"$r_{\rm mean}$ (us)",
         r"$\sigma$ (us)",
         r"$\sigma_{\rm stat}$ (us)",
-        r"$\sigma_{\rm ephem}$ (us)",
     ]
     final_table = Table(
         rows=lines,
