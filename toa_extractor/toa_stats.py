@@ -53,6 +53,9 @@ def get_toa_stats(
 
         columns = ["obsid", "mjd", "fit_residual", "fit_residual_err"] + list(set(ephem_cols))
         print(subsubtable_aggr[columns])
+        mission_table_fname = out_fname.replace(".csv", f"_{mission}_{instrument}.csv")
+        subsubtable_aggr[columns].write(mission_table_fname, overwrite=True)
+
         print(
             f"*** Results for mission {subsubtable_aggr['mission'][0]} and "
             f"instrument {subsubtable_aggr['instrument'][0]} ***"
