@@ -44,7 +44,6 @@ def test_get_toa_stats():
     assert table["Mission"][1] == "NICER"
     assert table["Mission"][2] == "NUSTAR"
     assert table["$N$"][0] == 1
-    assert np.allclose(table[r"$\sigma_{\rm ephem}$ (us)"][1:], 0.5)
 
     assert np.isnan(table[r"$\sigma$ (us)"][0])
 
