@@ -14,6 +14,8 @@ def get_toa_stats(
         raise FileNotFoundError(f"Summary file {summary_fname} does not exist.")
     table = Table.read(summary_fname)
 
+    table["rough_mjd"] = [float(f"{mjd:.2f}") for mjd in table["mjd"]]
+
     table_groups = table.group_by(["mission", "instrument"])
     lines = []
 
@@ -21,16 +23,18 @@ def get_toa_stats(
         mission = subtable["mission"][0]
         instrument = subtable["instrument"][0]
         print(mission)
-        subtable = subtable.group_by(["obsid", "mjd", "ephem"]).groups.aggregate(np.mean)
+        subtable = subtable.group_by(["obsid", "rough_mjd", "ephem"]).groups.aggregate(np.mean)
         subsubtable_list = []
         ephem_diff = []
-        for subsub in subtable.group_by(["obsid", "mjd"]).groups:
+        for subsub in subtable.group_by(["obsid", "rough_mjd"]).groups:
+            print(subsub["rough_mjd", "ephem", "obsid"])
             if len(subsub) > 1:
                 ephem_diff.append(np.std(subsub["fit_residual"]))
             else:
                 ephem_diff.append(np.nan)
-            subsubtable = subsub["obsid", "mjd", "fit_residual", "fit_residual_err"]
-            subsubtable = subsubtable.group_by(["obsid", "mjd"]).groups.aggregate(np.mean)
+            subsubtable = subsub["obsid", "mjd", "rough_mjd", "fit_residual", "fit_residual_err"]
+            subsubtable = subsubtable.group_by(["obsid", "rough_mjd"]).groups.aggregate(np.mean)
+            print(subsubtable)
             subsubtable["mission"] = [mission] * len(subsubtable)
             subsubtable["instrument"] = [instrument] * len(subsubtable)
             subsubtable_list.append(subsubtable)
@@ -107,7 +111,7 @@ def main(args=None):
     args = parser.parse_args(args)
 
     if args.output is None:
-        args.output = args.summary_fname.replace(".csv", "") + "toa_stats.csv"
+        args.output = args.summary_fname.replace(".csv", "") + "_toa_stats.csv"
 
     get_toa_stats(
         args.summary_fname,
