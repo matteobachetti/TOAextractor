@@ -2,6 +2,7 @@ import os
 import numpy as np
 from scipy.stats import median_abs_deviation
 from astropy.table import Table, vstack
+from astropy.io import ascii
 from itertools import combinations
 
 
@@ -32,10 +33,11 @@ def get_toa_stats(
                 combs = list(combinations(set(subsub["ephem"]), 2))
                 diffs = {}
                 for comb in combs:
+                    comb = sorted(comb)
                     val = f"{comb[0]} - {comb[1]}"
                     comb0 = subsub[subsub["ephem"] == comb[0]]
                     comb1 = subsub[subsub["ephem"] == comb[1]]
-                    diffs[val] = comb0["fit_residual"][0] - comb1["fit_residual"]
+                    diffs[val] = comb0["fit_residual"] - comb1["fit_residual"]
                     ephem_cols.append(val)
 
             else:
@@ -54,7 +56,13 @@ def get_toa_stats(
         columns = ["obsid", "mjd", "fit_residual", "fit_residual_err"] + list(set(ephem_cols))
         print(subsubtable_aggr[columns])
         mission_table_fname = out_fname.replace(".csv", f"_{mission}_{instrument}.csv")
-        subsubtable_aggr[columns].write(mission_table_fname, overwrite=True)
+        subsubtable_aggr[columns].write(
+            mission_table_fname,
+            overwrite=True,
+            format="csv",
+            delimiter=",",
+            fill_values=[(ascii.masked, "N/A")],
+        )
 
         print(
             f"*** Results for mission {subsubtable_aggr['mission'][0]} and "
