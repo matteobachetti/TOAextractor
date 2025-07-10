@@ -34,9 +34,7 @@ def test_get_toa_stats():
     outfname = "test_out_stats.csv"
     out_tex_fname = outfname.replace("csv", "tex")
     # Call the function to test
-    table = get_toa_stats(
-        summary_fname, out_fname=outfname, out_tex_fname=out_tex_fname
-    )
+    table = get_toa_stats(summary_fname, out_fname=outfname, out_tex_fname=out_tex_fname)
     assert len(table) == 3
     assert "Mission" in table.colnames
     table.sort("Mission")  # Astrosat is the first line

@@ -32,7 +32,7 @@ def get_toa_stats(
                 combs = list(combinations(set(subsub["ephem"]), 2))
                 diffs = {}
                 for comb in combs:
-                    val  = f"{comb[0]} - {comb[1]}"
+                    val = f"{comb[0]} - {comb[1]}"
                     comb0 = subsub[subsub["ephem"] == comb[0]]
                     comb1 = subsub[subsub["ephem"] == comb[1]]
                     diffs[val] = comb0["fit_residual"][0] - comb1["fit_residual"]
