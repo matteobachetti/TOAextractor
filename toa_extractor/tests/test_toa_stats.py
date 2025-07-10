@@ -42,6 +42,8 @@ def test_get_toa_stats():
     assert table["Mission"][1] == "NICER"
     assert table["Mission"][2] == "NUSTAR"
     assert table["$N$"][0] == 1
+    assert os.path.exists(outfname.replace(".csv", "_nustar_fpma.csv"))
+    assert os.path.exists(outfname.replace(".csv", "_nicer_xti.csv"))
 
     assert np.isnan(table[r"$\sigma$ (us)"][0])
 
