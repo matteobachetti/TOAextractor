@@ -16,6 +16,7 @@ def main(args=None):
 
     result_table = None
     for fname in args.files:
+        print(f"Processing {fname}")
         info = load_yaml_file(fname)
         new_info = dict([(key, [val]) for key, val in info.items()])
         for arr in ["phase", "expo"]:
