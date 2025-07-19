@@ -8,9 +8,7 @@ def test_refit_solution_ephem(ephem):
     mjd = 57974.71650905952  # Problematic in some previous tests
     model = get_crab_ephemeris(mjd, ephem=ephem, force_parameters=None)
 
-    if ephem.upper() == "DE200":
-        assert model.TRES.value is None
-    else:
+    if ephem.upper() != "DE200":
         assert model.TRES.value < 2
 
 

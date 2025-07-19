@@ -159,7 +159,7 @@ def retrieve_cgro_ephemeris():
 
 
 def get_best_cgro_row(MJD):
-    """ Get the best matching row from the CGRO ephemeris for a given MJD.
+    """Get the best matching row from the CGRO ephemeris for a given MJD.
     Parameters
     ----------
     MJD : float
@@ -176,7 +176,7 @@ def get_best_cgro_row(MJD):
 
 
 def get_best_txt_row(MJD):
-    """ Get the best matching row from the text ephemeris for a given MJD.
+    """Get the best matching row from the text ephemeris for a given MJD.
     Parameters
     ----------
     MJD : float
@@ -320,13 +320,24 @@ TRES             {rms_us:.2f}
     return model_new_start
 
 
+def _default_fname(mjd, ephem="DE200", force_parameters=None):
+    """Generate a default filename based on the ephemeris and forced parameters."""
+    fname = f"Crab_{mjd}_{ephem}"
+    if force_parameters is not None:
+        fname += "".join([f"_{k}_{v}" for k, v in force_parameters.items()])
+    fname += ".par"
+    return fname
+
+
 def refit_solution(
     model_200,
     new_ephem,
     rms_tolerance=None,
     force_parameters=None,
+    plot=True,
+    fname=None,
 ):
-    """ Refits the model with a new ephemeris and new coordinates.
+    """Refits the model with a new ephemeris and new coordinates.
 
     Parameters
     ----------
@@ -347,6 +358,11 @@ def refit_solution(
     """
     if rms_tolerance is None:
         rms_tolerance = 1 * u.us
+
+    if fname is None:
+        fname = _default_fname(
+            model_200.PEPOCH.value, ephem=new_ephem, force_parameters=force_parameters
+        )
 
     t0_mjd = np.longdouble(model_200.START.value) - 1
     t1_mjd = np.longdouble(model_200.FINISH.value) + 1
@@ -387,10 +403,37 @@ def refit_solution(
     fake_geo_toas.ephem = new_ephem
     print("TOAs:", fake_geo_toas.get_summary())
 
-    # Use the fake TOAs to fit the model with the new ephemeris
-    f = pint.fitter.DownhillWLSFitter(fake_geo_toas, model_new_start)
-    f.fit_toas()  # fit_toas() returns the final reduced chi squared
+    print(model_200.compare(model_new_start))
+    if plot:
+        r = Residuals(fake_geo_toas, model_new_start, subtract_mean=False, track_mode="nearest")
+        import matplotlib.pyplot as plt
 
+        plt.errorbar(
+            fake_geo_toas.get_mjds(),
+            r.time_resids.to_value("us"),
+            r.get_data_error().to_value("us"),
+            marker="+",
+            ls="",
+        )
+    try:
+        # Use the fake TOAs to fit the model with the new ephemeris
+        f = pint.fitter.DownhillWLSFitter(fake_geo_toas, model_new_start)
+        f.fit_toas()  # fit_toas() returns the final reduced chi squared
+    except pint.exceptions.StepProblem as e:
+        log.error(f"StepProblem encountered: {e}")
+        log.error("This may be due to a bad initial guess for the model parameters.")
+        log.error("Try changing the initial guess or using a different ephemeris.")
+
+    if plot:
+        r = Residuals(fake_geo_toas, f.model, subtract_mean=False, track_mode="nearest")
+        plt.errorbar(
+            fake_geo_toas.get_mjds(),
+            r.time_resids.to_value("us"),
+            r.get_data_error().to_value("us"),
+            marker="+",
+            ls="",
+        )
+        plt.savefig(fname.replace(".par", "_residuals.jpg"))
     rms = f.resids.rms_weighted()
     # print(rms, rms_tolerance)
     if rms > rms_tolerance:
@@ -401,6 +444,7 @@ def refit_solution(
     new_model.components["AbsPhase"].make_TZR_toa(fake_geo_toas)
     new_model.PHOFF.quantity = current_phoff
     print(new_model.compare(model_200))
+    new_model.write_parfile(fname, include_info=False)
     return new_model
 
 
@@ -429,10 +473,11 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None, fo
     else:
         raise ValueError(f"Unknown format: {format}")
 
+    model_200.write_parfile(_default_fname(MJD, ephem="DE200"), include_info=False)
     if fname is None:
-        fname = f"Crab_{model_200.PEPOCH.value}.par"
-
-    model_200.write_parfile(fname.replace(".par", "_jb.par"), include_info=False)
+        fname = _default_fname(
+            model_200.PEPOCH.value, ephem=ephem, force_parameters=force_parameters
+        )
 
     if ephem.upper() == "DE200" and force_parameters is None:
         return model_200
@@ -444,8 +489,8 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None, fo
         ephem,
         rms_tolerance=model_200.TRES.quantity / 10,
         force_parameters=force_parameters,
+        fname=fname,
+        plot=True,
     )
 
-    fit_model.write_parfile(fname, include_info=False)
-    # print(fit_model.as_parfile())
     return fit_model
