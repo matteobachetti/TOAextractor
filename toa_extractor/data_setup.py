@@ -8,6 +8,7 @@ import yaml
 from astropy import log
 from astropy import units as u
 from astropy.table import Table, vstack
+from astropy.coordinates import SkyCoord
 from hendrics.efsearch import (
     EFPeriodogram,
     _analyze_qffa_results,
@@ -25,7 +26,7 @@ from .utils import output_name
 from .utils.config import get_template, load_yaml_file
 
 # from .utils.fit_crab_profiles import normalize_phase_0d5
-from .utils.crab import get_crab_ephemeris
+from .utils.crab import get_crab_ephemeris, get_best_cgro_row
 from .utils.data_manipulation import get_events_from_fits, get_observing_info
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 
@@ -208,6 +209,7 @@ class GetPhaseogram(luigi.Task):
         fitsreader = FITSTimeseriesReader(
             self.fname, output_class=EventList, additional_columns=["PRIOR"]
         )
+
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
         current_gtis = fitsreader.gti
         if current_gtis is None:
@@ -470,17 +472,20 @@ class GetParfile(luigi.Task):
         force_parameters = None
         if "ra_bary" in info and info["ra_bary"] is not None:
             log.info("Trying to set coordinates to the values found in the FITS file header")
+            frame = info["frame"]
+
+            coords = SkyCoord(info["ra_bary"] * u.deg, info["dec_bary"] * u.deg, frame=frame)
+            log.info(f"{ephem}: using coordinates from the FITS file header: {coords}")
+
             force_parameters = {
                 "RAJ": info["ra_bary"] * u.deg,
                 "DECJ": info["dec_bary"] * u.deg,
             }
 
-        model1 = get_crab_ephemeris(
-            info["mjdstart"], ephem=ephem, force_parameters=force_parameters
-        )
-        model2 = get_crab_ephemeris(info["mjdstop"], ephem=ephem, force_parameters=force_parameters)
+        line1 = get_best_cgro_row(info["mjdstart"])
+        line2 = get_best_cgro_row(info["mjdstop"])
 
-        if model1.PEPOCH.value != model2.PEPOCH.value:
+        if line1["MJD1"] != line2["MJD1"]:
             warnings.warn(f"Different models for start and stop of {self.fname}")
             n_months = max(np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int), 2)
             models = [
@@ -501,7 +506,10 @@ class GetParfile(luigi.Task):
                     count += 1
         else:
             fname1 = fname.replace(".txt", ".par")
-            model1.write_parfile(fname1, include_info=False)
+            model = get_crab_ephemeris(
+                info["mjdstart"], ephem=ephem, force_parameters=force_parameters
+            )
+            model.write_parfile(fname1, include_info=False)
             parfiles = [fname1]
 
         with open(fname, "w") as fobj:
