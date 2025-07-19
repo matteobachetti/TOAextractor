@@ -443,7 +443,6 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None, fo
         model_200,
         ephem,
         rms_tolerance=model_200.TRES.quantity / 10,
-        include_proper_motion=False,
         force_parameters=force_parameters,
     )
 
