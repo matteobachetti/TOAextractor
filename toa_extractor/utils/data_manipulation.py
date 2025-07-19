@@ -390,6 +390,16 @@ def get_observing_info(evfile, hduname=1):
         info["mjdref"] = float_if_not_none(info["mjdref_highprec"])
         info["mode"] = mode
         info["ephem"] = safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip("JPL-").lower()
+        if "RADECSYS" not in header:
+            warnings.warn(
+                "RADECSYS not found in header. Assuming FK5 if the ephemeris"
+                "is JPL-DE200, and ICRS otherwise. "
+                "This may lead to incorrect results."
+            )
+            info["frame"] = "fk5" if info["ephem"] == "de200" else "icrs"
+        else:
+            info["frame"] = header["RADECSYS"].strip().lower()
+
         info["timesys"] = safe_get_key(header, "TIMESYS", "TDB").strip().lower()
         info["timeref"] = safe_get_key(header, "TIMEREF", "SOLARSYSTEM").strip().lower()
         info["tstart"] = float_if_not_none(safe_get_key(header, "TSTART", None))
