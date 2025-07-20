@@ -12,6 +12,7 @@ pytestmark = pytest.mark.skipif(
     reason="Tests require longdouble with at least 80 bits"
 )
 
+
 @pytest.mark.parametrize("ephem", ["DE200", "DE430", "DE440"])
 def test_refit_solution_ephem(ephem):
     mjd = 57974.71650905952  # Problematic in some previous tests
