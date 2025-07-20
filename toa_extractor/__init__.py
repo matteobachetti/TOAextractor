@@ -11,3 +11,13 @@ pint.logging.setup(level="INFO")
 # ----------------------------------------------------------------------------
 
 __all__ = []
+
+from pint.utils import check_longdouble_precision
+
+if not check_longdouble_precision():
+    raise RuntimeError(
+        "TOAextractor requires longdouble precision to be at least 80 bits. "
+        "This is not the case on your system. It is often possible to fix this by "
+        "installing a different Python interpreter. For ARM-based Macs, follow the instructions at "
+        "https://nanograv-pint.readthedocs.io/en/latest/installation.html#apple-m1-m2-processors"
+    )
