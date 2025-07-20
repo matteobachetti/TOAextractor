@@ -1,7 +1,16 @@
 import numpy as np
 import pytest
 from toa_extractor.utils.crab import get_crab_ephemeris
+from toa_extractor import check_longdouble_precision
 
+
+# Check if architecture is Linux and longdouble is at least 80 bits
+skip_tests = not check_longdouble_precision()
+
+pytestmark = pytest.mark.skipif(
+    skip_tests,
+    reason="Tests require longdouble with at least 80 bits"
+)
 
 @pytest.mark.parametrize("ephem", ["DE200", "DE430", "DE440"])
 def test_refit_solution_ephem(ephem):
