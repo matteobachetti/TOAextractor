@@ -1,4 +1,6 @@
 import copy
+import os
+import random
 
 import luigi
 import matplotlib.pyplot as plt
@@ -493,7 +495,7 @@ def main(args=None):
     parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
-    parser.add_argument("--config", help="Config file", type=str, default="none")
+    parser.add_argument("--config", help="Config file", type=str, default=None)
     parser.add_argument("-v", "--version", help="Version", type=str, default="none")
     parser.add_argument(
         "-N",
@@ -506,9 +508,13 @@ def main(args=None):
     args = parser.parse_args(args)
 
     config_file = args.config
+    if config_file is None:
+        from .utils.config import read_config
 
-    import os
-    import random
+        config = read_config("default")
+        config_file = "default_config.yaml"
+        with open(config_file, "w") as file:
+            yaml.dump(config, file)
 
     fnames = args.files
     if args.nmax is not None:

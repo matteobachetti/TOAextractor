@@ -456,6 +456,11 @@ class GetParfile(luigi.Task):
             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
+        config_file = self.config_file
+        config = load_yaml_file(config_file)
+        if "format" not in config:
+            config["format"] = "text"
+
         ephem = info["ephem"]
         crab_names = ["crab", "b0531+21", "j0534+22"]
         found_crab = False
@@ -489,7 +494,9 @@ class GetParfile(luigi.Task):
             warnings.warn(f"Different models for start and stop of {self.fname}")
             n_months = max(np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int), 2)
             models = [
-                get_crab_ephemeris(mjd, ephem=ephem, force_parameters=force_parameters)
+                get_crab_ephemeris(
+                    mjd, ephem=ephem, force_parameters=force_parameters, format=config["format"]
+                )
                 for mjd in np.linspace(info["mjdstart"], info["mjdstop"], n_months)
             ]
             fname_root = fname.replace(".txt", "")
@@ -507,7 +514,10 @@ class GetParfile(luigi.Task):
         else:
             fname1 = fname.replace(".txt", ".par")
             model = get_crab_ephemeris(
-                info["mjdstart"], ephem=ephem, force_parameters=force_parameters
+                info["mjdstart"],
+                ephem=ephem,
+                force_parameters=force_parameters,
+                format=config["format"],
             )
             model.write_parfile(fname1, include_info=False)
             parfiles = [fname1]
