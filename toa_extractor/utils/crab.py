@@ -12,12 +12,10 @@ import pint
 import pint.fitter
 import pint.simulation
 from pint.toa import get_TOAs_array
-from pint.toa import TOA, TOAs
 from pint.residuals import Residuals
 from astropy import log
 from astropy.coordinates import SkyCoord
 from astropy.table import Table, vstack
-from astroquery.heasarc import Heasarc
 from pint.models import get_model
 
 crab_coords = SkyCoord("05h34m31.97232", "22d00m52.069", frame="fk5")
@@ -106,7 +104,7 @@ def retrieve_txt_ephemeris():
                     val = np.nan
                 try:
                     float_val = np.longdouble(val)
-                except:
+                except ValueError:
                     new_line[key] = val
                     continue
                 if float_val % 1 == 0:
