@@ -21,5 +21,5 @@ if not check_longdouble_precision():
         "This is not the case on your system. It is often possible to fix this by "
         "installing a different Python interpreter. For ARM-based Macs, follow the instructions at "
         "https://nanograv-pint.readthedocs.io/en/latest/installation.html#apple-m1-m2-processors",
-        RuntimeWarning
+        RuntimeWarning,
     )
