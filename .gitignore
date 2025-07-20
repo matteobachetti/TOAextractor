@@ -16,6 +16,12 @@ htmlcov
 .coverage
 MANIFEST
 .ipynb_checkpoints
+Crab*
+summary_test*
+notebooks/*
+test_out*
+*.csv
+*.tex
 
 # Sphinx
 docs/api
@@ -60,6 +66,7 @@ distribute-*.tar.gz
 .pydevproject
 .settings
 pip-wheel-metadata/
+.hypothesis/
 
 # Mac OSX
 .DS_Store
