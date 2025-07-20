@@ -440,6 +440,7 @@ def refit_solution(
     new_model = f.model
     # Substitute with get_TZR_toas, using one of the simulated TOAs?
     new_model.components["AbsPhase"].make_TZR_toa(fake_geo_toas)
+    new_model.TZRSITE.value = "0"
     new_model.PHOFF.quantity = current_phoff
     print(new_model.compare(model_200))
     new_model.write_parfile(fname, include_info=False)
@@ -464,9 +465,9 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None, fo
     """
     log.info(f"Getting correct ephemeris for MJD {MJD}")
 
-    if format == "txt":
+    if format in ["txt", "text"]:
         model_200 = create_model_from_txt(MJD)
-    elif format == "cgro":
+    elif format in ["cgro", "gro"]:
         model_200 = create_model_from_cgro(MJD)
     else:
         raise ValueError(f"Unknown format: {format}")
