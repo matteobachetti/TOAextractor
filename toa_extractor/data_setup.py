@@ -459,7 +459,7 @@ class GetParfile(luigi.Task):
         config_file = self.config_file
         config = load_yaml_file(config_file)
         if "format" not in config:
-            config["format"] = "text"
+            config["format"] = "cgro"
 
         ephem = info["ephem"]
         crab_names = ["crab", "b0531+21", "j0534+22"]

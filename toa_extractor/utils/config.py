@@ -27,7 +27,7 @@ def parse_config_dict(config):
 def read_config(config_file):
     """Read configuration file."""
     if config_file == "default" and not os.path.exists(config_file):
-        return {"timeout": 10, "format": "text"}
+        return {"timeout": 10, "format": "cgro"}
     with open(config_file) as fobj:
         try:
             config = load(fobj, Loader=Loader)
