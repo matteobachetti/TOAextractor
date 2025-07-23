@@ -14,6 +14,7 @@ from .data_setup import (
     GetInfo,
     GetPhaseogram,
     GetTemplate,
+    GetPulseFreq,
     _get_and_normalize_phaseogram,
     _plot_phaseogram,
 )
@@ -529,6 +530,52 @@ def main(args=None):
 
     _ = luigi.build(
         [TOAPipeline(fname, config_file, args.version) for fname in fnames],
+        local_scheduler=True,
+        log_level="INFO",
+        workers=4,
+    )
+
+
+def main_freq(args=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
+
+    parser.add_argument("files", help="Input binary files", type=str, nargs="+")
+    parser.add_argument("--config", help="Config file", type=str, default=None)
+    parser.add_argument("-v", "--version", help="Version", type=str, default="none")
+    parser.add_argument(
+        "-N",
+        "--nmax",
+        help="Maximum number of data files from a given directory",
+        type=int,
+        default=None,
+    )
+
+    args = parser.parse_args(args)
+
+    config_file = args.config
+    if config_file is None:
+        from .utils.config import read_config
+
+        config = read_config("default")
+        config_file = "default_config.yaml"
+        with open(config_file, "w") as file:
+            yaml.dump(config, file)
+
+    fnames = args.files
+    if args.nmax is not None:
+        log.info(f"Analyzing only {args.nmax} files per directory, chosen randomly")
+        dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
+        fnames = []
+        for d in dirs:
+            good_files = [f for f in args.files if f.startswith(d)]
+            if len(good_files) > args.nmax:
+                good_files = random.sample(good_files, k=args.nmax)
+            fnames += good_files
+
+    _ = luigi.build(
+        [GetPulseFreq(fname, config_file, args.version) for fname in fnames],
         local_scheduler=True,
         log_level="INFO",
         workers=4,

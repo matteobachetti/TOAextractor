@@ -393,22 +393,27 @@ class GetPulseFreq(luigi.Task):
                 + secs_from_pepoch * model.F1.value
                 + 0.5 * secs_from_pepoch**2 * model.F2.value
             )
-            f0_err = 2 / length
-            frequency_range = [central_freq - f0_err, central_freq + f0_err]
+            central_fdot = model.F1.value + secs_from_pepoch * model.F2.value
+            f0_err = 0.8 / length
+            frequency_range = [central_freq - f0_err / 2, central_freq + f0_err / 2]
 
             log.info(
                 f"Searching for pulsations in interval {frequency_range[0]}-{frequency_range[1]}"
             )
             log.info(f"The central frequency is {central_freq}")
 
-            frequencies, stats, step, length = search_with_qffa(
+            results = search_with_qffa(
                 events_to_analyze,
                 *frequency_range,
+                fdot=central_fdot,
                 nbin=nbin,
+                npfact=1,
                 n=N,
-                search_fdot=False,
-                oversample=nbin // 2,
+                search_fdot=True,
+                oversample=N * 8,
             )
+            frequencies, fdots, stats, step, fdotsteps, length = results
+
             efperiodogram = EFPeriodogram(
                 frequencies,
                 stats,
@@ -416,8 +421,9 @@ class GetPulseFreq(luigi.Task):
                 nbin,
                 N,
                 mjdref=events.mjdref,
-                pepoch=ref_time,
+                pepoch=ref_mjd,
                 oversample=N * 8,
+                fdots=fdots,
             )
             efperiodogram.upperlim = pf_upper_limit(np.max(stats), events.time.size, n=N)
             efperiodogram.ncounts = events.time.size
@@ -430,6 +436,7 @@ class GetPulseFreq(luigi.Task):
             ]
 
             best_cand_table["initial_freq_estimate"] = central_freq
+            best_cand_table["fname"] = self.fname
             log.info(best_cand_table[0])
             result_table.append(best_cand_table[0])
         result_table = vstack(result_table)
