@@ -486,7 +486,7 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None, fo
     fit_model = refit_solution(
         model_200,
         ephem,
-        rms_tolerance=model_200.TRES.quantity / 10,
+        rms_tolerance=1 * u.us,
         force_parameters=force_parameters,
         fname=fname,
         plot=True,
