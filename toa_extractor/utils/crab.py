@@ -7,6 +7,7 @@ import time
 
 import astropy.units as u
 import numpy as np
+import matplotlib.pyplot as plt
 
 import pint
 import pint.fitter
@@ -92,7 +93,6 @@ def retrieve_txt_ephemeris():
                 continue
             if line_data[0] == "Date":
                 header_data = line_data
-                # print("Header data:", header_data)
                 continue
             if line_data[0] == "sec":
                 continue
@@ -114,7 +114,6 @@ def retrieve_txt_ephemeris():
             if len(header_data) >= i + 3:
                 new_line["Notes"] = line_data[i + 4]
             rows.append(Table(rows=[new_line]))
-            # print(rows[-1]["DM"])
 
         return vstack(rows)
 
@@ -399,12 +398,11 @@ def refit_solution(
     )
     # But change the ephemeris to the new one
     fake_geo_toas.ephem = new_ephem
-    print("TOAs:", fake_geo_toas.get_summary())
+    log.info(f"TOAs: {fake_geo_toas.get_summary()}")
 
-    print(model_200.compare(model_new_start))
+    log.info(str(model_200.compare(model_new_start)))
     if plot:
         r = Residuals(fake_geo_toas, model_new_start, subtract_mean=False, track_mode="nearest")
-        import matplotlib.pyplot as plt
 
         plt.errorbar(
             fake_geo_toas.get_mjds(),
@@ -432,8 +430,8 @@ def refit_solution(
             ls="",
         )
         plt.savefig(fname.replace(".par", "_residuals.jpg"))
+        plt.close(plt.gcf())
     rms = f.resids.rms_weighted()
-    # print(rms, rms_tolerance)
     if rms > rms_tolerance:
         log.error(f"{rms} > {rms_tolerance} at MJD {t0_mjd:.2}-{t1_mjd:.2}")
 
@@ -442,7 +440,7 @@ def refit_solution(
     new_model.components["AbsPhase"].make_TZR_toa(fake_geo_toas)
     new_model.TZRSITE.value = "0"
     new_model.PHOFF.quantity = current_phoff
-    print(new_model.compare(model_200))
+    log.info(str(new_model.compare(model_200)))
     new_model.write_parfile(fname, include_info=False)
     return new_model
 
@@ -481,7 +479,7 @@ def get_crab_ephemeris(MJD, fname=None, ephem="DE200", force_parameters=None, fo
     if ephem.upper() == "DE200" and force_parameters is None:
         return model_200
 
-    print(f"ephem={ephem}, REFITTING")
+    log.info(f"ephem={ephem}, REFITTING")
 
     fit_model = refit_solution(
         model_200,

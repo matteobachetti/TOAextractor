@@ -28,7 +28,6 @@ class TestPipeline(object):
                     continue
                 main_pipe([f, "--version", version_label])
                 outputs = get_outputs(GetResidual(f, "none", version=version_label))
-                print(outputs)
                 for outf in outputs:
                     assert os.path.exists(outf)
 
