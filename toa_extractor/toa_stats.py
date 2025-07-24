@@ -75,7 +75,10 @@ def get_toa_stats(
 
         mission = subsubtable_aggr["mission"][0]
         instrument = subsubtable_aggr["instrument"][0]
+        good = subsubtable_aggr["fit_residual_err"] < 0.015
+        subsubtable_aggr = subsubtable_aggr[good]
         n_meas = len(subsubtable_aggr)
+
         if n_meas < 3:
             mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
             std_residual = np.nan
@@ -114,7 +117,7 @@ def get_toa_stats(
     )
     print("\nSummary of TOA statistics:")
     final_table.pprint()
-    final_table[names[:-1]].write(out_tex_fname, overwrite=True)
+    final_table[names].write(out_tex_fname, overwrite=True)
     final_table.write(out_fname, overwrite=True)
     return final_table
 
