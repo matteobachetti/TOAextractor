@@ -19,7 +19,7 @@ from .data_setup import (
     _plot_phaseogram,
 )
 from .utils import encode_image_file, output_name, search_substring_in_list
-from .utils.config import load_yaml_file
+from .utils.config import load_yaml_file, read_config
 from .utils.fit_crab_profiles import (
     _plot_profile_and_fit,
     create_template_from_profile_table,
@@ -510,7 +510,6 @@ def main(args=None):
 
     config_file = args.config
     if config_file is None:
-        from .utils.config import read_config
 
         config = read_config("default")
         config_file = "default_config.yaml"
