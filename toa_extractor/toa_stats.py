@@ -5,7 +5,7 @@ from astropy.table import Table, vstack
 from astropy.io import ascii
 import astropy.units as u
 from itertools import combinations
-from . import KNOWN_OFFSETS
+from .utils import KNOWN_OFFSETS
 
 
 def get_toa_stats(
