@@ -517,6 +517,7 @@ def main(args=None):
         with open(config_file, "w") as file:
             yaml.dump(config, file)
 
+    config = read_config(config_file)
     fnames = args.files
     if args.nmax is not None:
         log.info(f"Analyzing only {args.nmax} files per directory, chosen randomly")
@@ -529,7 +530,15 @@ def main(args=None):
             fnames += good_files
 
     _ = luigi.build(
-        [TOAPipeline(fname, config_file, args.version) for fname in fnames],
+        [
+            TOAPipeline(
+                fname,
+                config_file,
+                args.version,
+                worker_timeout=config["worker_timeout"] if "worker_timeout" in config else 600,
+            )
+            for fname in fnames
+        ],
         local_scheduler=True,
         log_level="INFO",
         workers=4,
