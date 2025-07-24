@@ -32,6 +32,7 @@ def main(args=None):
         else:
             result_table = pd.concat((result_table, newtab))
     result_table.sort_values(by="mission", inplace=True)
+
     result_table["path"] = [os.path.dirname(f) for f in result_table["fname"]]
     result_table["fname"] = [os.path.basename(f) for f in result_table["fname"]]
     result_table.to_csv(args.output)

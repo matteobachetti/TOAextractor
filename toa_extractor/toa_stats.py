@@ -5,9 +5,7 @@ from astropy.table import Table, vstack
 from astropy.io import ascii
 import astropy.units as u
 from itertools import combinations
-
-
-KNOWN_OFFSETS = {"hxmt/le": -864 * u.us, "hitomi/sxs": 500 * u.us}
+from . import KNOWN_OFFSETS
 
 
 def get_toa_stats(
