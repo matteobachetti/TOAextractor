@@ -3,7 +3,11 @@ import numpy as np
 from scipy.stats import median_abs_deviation
 from astropy.table import Table, vstack
 from astropy.io import ascii
+import astropy.units as u
 from itertools import combinations
+
+
+KNOWN_OFFSETS = {"hxmt/le": -864 * u.us, "hitomi/sxs": 500 * u.us}
 
 
 def get_toa_stats(
@@ -78,28 +82,40 @@ def get_toa_stats(
         good = subsubtable_aggr["fit_residual_err"] < 0.015
         subsubtable_aggr = subsubtable_aggr[good]
         n_meas = len(subsubtable_aggr)
+        offset = KNOWN_OFFSETS.get(
+            f"{mission.lower()}/{instrument.lower()}",
+            0 * u.us,
+        ).to_value(u.s)
+        print(f"{mission}/{instrument} offset (us): {1e6 * offset:.2f}")
+        label = "*" if np.abs(offset) > 0 else ""
 
         if n_meas < 3:
-            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
+            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"]) + offset
             std_residual = np.nan
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
         elif n_meas > 20:
-            mean_residual = np.median(subsubtable_aggr["fit_residual"])
+            mean_residual = np.median(subsubtable_aggr["fit_residual"]) + offset
+
             std_residual = median_abs_deviation(subsubtable_aggr["fit_residual"], scale="normal")
             mean_stat_err = np.median(subsubtable_aggr["fit_residual_err"])
         else:
-            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
+            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"]) + offset
+
             std_residual = np.nanstd(subsubtable_aggr["fit_residual"])
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
+
+        mean_residual_approx = float(f"{mean_residual * 1e6:.2e}")
+        std_residual_approx = float(f"{std_residual * 1e6:.1e}")
+        mean_stat_err_approx = float(f"{mean_stat_err * 1e6:.1e}")
 
         lines.append(
             [
                 mission.upper(),
                 instrument.upper(),
                 n_meas,
-                float(f"{mean_residual * 1e6:.1e}"),
-                float(f"{std_residual * 1e6:.1e}"),
-                float(f"{mean_stat_err * 1e6:.1e}"),
+                f"{mean_residual_approx:g}".replace("nan", "--") + label,
+                f"{std_residual_approx:g}".replace("nan", "--"),
+                f"{mean_stat_err_approx:g}".replace("nan", "--"),
             ]
         )
 
