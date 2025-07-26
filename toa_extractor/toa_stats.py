@@ -36,11 +36,14 @@ def get_toa_stats(
                 diffs = {}
                 for comb in combs:
                     comb = sorted(comb)
-                    val = f"{comb[0]} - {comb[1]}"
+                    val = f"{comb[0]}_minus_{comb[1]}"
                     comb0 = subsub[subsub["ephem"] == comb[0]]
                     comb1 = subsub[subsub["ephem"] == comb[1]]
                     diffs[val] = comb0["fit_residual"] - comb1["fit_residual"]
-                    ephem_cols.append(val)
+                    diffs[val + "_err"] = np.sqrt(
+                        comb0["fit_residual_err"] ** 2 - comb1["fit_residual_err"] ** 2
+                    )
+                    ephem_cols.extend([val, val + "_err"])
 
             else:
                 diffs = {}
