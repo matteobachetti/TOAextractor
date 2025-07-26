@@ -13,7 +13,6 @@ def create_fake_summary_file():
         "fit_residual": np.random.normal(0, 1e-6, size=24),
         "fit_residual_err": np.random.chisquare(2, size=24) / 1e6,
     }
-    print([len(d) for d in data.values()])
     df = Table(data)
     df = vstack([df, df])  # Duplicate the data to have more entries
     df["ephem"][24:] = "DE430"

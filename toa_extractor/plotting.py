@@ -13,7 +13,7 @@ from bokeh.models import (
     PolyAnnotation,
     Whisker,
 )
-from bokeh.palettes import Category20b_20
+from bokeh.palettes import Turbo256
 from bokeh.plotting import figure, output_file, save, show
 from bokeh.transform import factor_cmap, factor_mark
 from uncertainties import ufloat
@@ -120,7 +120,7 @@ def plot_frequency_history(
 
     color = factor_cmap(
         "mission+ephem",
-        palette=Category20b_20,
+        palette=Turbo256[:: int(len(Turbo256) / len(mission_ephem_combs))],
         factors=mission_ephem_combs,
         end=len(mission_ephem_combs),
     )
@@ -266,7 +266,7 @@ def plot_residuals(
 
     color = factor_cmap(
         "mission+ephem",
-        palette=Category20b_20,
+        palette=Turbo256[:: int(len(Turbo256) / len(mission_ephem_combs))],
         factors=mission_ephem_combs,
         end=len(mission_ephem_combs),
     )

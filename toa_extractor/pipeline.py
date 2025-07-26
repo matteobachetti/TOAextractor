@@ -1,4 +1,6 @@
 import copy
+import os
+import random
 
 import luigi
 import matplotlib.pyplot as plt
@@ -12,11 +14,12 @@ from .data_setup import (
     GetInfo,
     GetPhaseogram,
     GetTemplate,
+    GetPulseFreq,
     _get_and_normalize_phaseogram,
     _plot_phaseogram,
 )
 from .utils import encode_image_file, output_name, search_substring_in_list
-from .utils.config import load_yaml_file
+from .utils.config import load_yaml_file, read_config
 from .utils.fit_crab_profiles import (
     _plot_profile_and_fit,
     create_template_from_profile_table,
@@ -493,7 +496,7 @@ def main(args=None):
     parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
-    parser.add_argument("--config", help="Config file", type=str, default="none")
+    parser.add_argument("--config", help="Config file", type=str, default=None)
     parser.add_argument("-v", "--version", help="Version", type=str, default="none")
     parser.add_argument(
         "-N",
@@ -506,9 +509,67 @@ def main(args=None):
     args = parser.parse_args(args)
 
     config_file = args.config
+    if config_file is None:
 
-    import os
-    import random
+        config = read_config("default")
+        config_file = "default_config.yaml"
+        with open(config_file, "w") as file:
+            yaml.dump(config, file)
+
+    config = read_config(config_file)
+    fnames = args.files
+    if args.nmax is not None:
+        log.info(f"Analyzing only {args.nmax} files per directory, chosen randomly")
+        dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
+        fnames = []
+        for d in dirs:
+            good_files = [f for f in args.files if f.startswith(d)]
+            if len(good_files) > args.nmax:
+                good_files = random.sample(good_files, k=args.nmax)
+            fnames += good_files
+
+    _ = luigi.build(
+        [
+            TOAPipeline(
+                fname,
+                config_file,
+                args.version,
+                worker_timeout=config["worker_timeout"] if "worker_timeout" in config else 600,
+            )
+            for fname in fnames
+        ],
+        local_scheduler=True,
+        log_level="INFO",
+        workers=4,
+    )
+
+
+def main_freq(args=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
+
+    parser.add_argument("files", help="Input binary files", type=str, nargs="+")
+    parser.add_argument("--config", help="Config file", type=str, default=None)
+    parser.add_argument("-v", "--version", help="Version", type=str, default="none")
+    parser.add_argument(
+        "-N",
+        "--nmax",
+        help="Maximum number of data files from a given directory",
+        type=int,
+        default=None,
+    )
+
+    args = parser.parse_args(args)
+
+    config_file = args.config
+    if config_file is None:
+        from .utils.config import read_config
+
+        config = read_config("default")
+        config_file = "default_config.yaml"
+        with open(config_file, "w") as file:
+            yaml.dump(config, file)
 
     fnames = args.files
     if args.nmax is not None:
@@ -522,7 +583,7 @@ def main(args=None):
             fnames += good_files
 
     _ = luigi.build(
-        [TOAPipeline(fname, config_file, args.version) for fname in fnames],
+        [GetPulseFreq(fname, config_file, args.version) for fname in fnames],
         local_scheduler=True,
         log_level="INFO",
         workers=4,

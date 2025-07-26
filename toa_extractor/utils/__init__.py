@@ -7,6 +7,10 @@ import io
 import os
 
 from PIL import Image
+from astropy import units as u
+
+
+KNOWN_OFFSETS = {"hxmt/le": -864 * u.us, "hitomi/sxs": 500 * u.us}
 
 
 def safe_get_key(dictionary, keys, default):

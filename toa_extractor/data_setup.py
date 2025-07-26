@@ -8,6 +8,7 @@ import yaml
 from astropy import log
 from astropy import units as u
 from astropy.table import Table, vstack
+from astropy.coordinates import SkyCoord
 from hendrics.efsearch import (
     EFPeriodogram,
     _analyze_qffa_results,
@@ -22,10 +23,10 @@ from stingray.io import FITSTimeseriesReader
 from stingray.pulse.pulsar import get_model
 
 from .utils import output_name
-from .utils.config import get_template, load_yaml_file
+from .utils.config import get_template, load_yaml_file, read_config
 
 # from .utils.fit_crab_profiles import normalize_phase_0d5
-from .utils.crab import get_crab_ephemeris
+from .utils.crab import get_crab_ephemeris, get_best_cgro_row
 from .utils.data_manipulation import get_events_from_fits, get_observing_info
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 
@@ -179,6 +180,8 @@ class GetPhaseogram(luigi.Task):
         infofile = (
             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
+        config = read_config(self.config_file)
+        ntimes_for_approximation = config.get("ntimes_for_approximation", 1000)
         info = load_yaml_file(infofile)
 
         ephem = info["ephem"]
@@ -208,6 +211,7 @@ class GetPhaseogram(luigi.Task):
         fitsreader = FITSTimeseriesReader(
             self.fname, output_class=EventList, additional_columns=["PRIOR"]
         )
+
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
         current_gtis = fitsreader.gti
         if current_gtis is None:
@@ -256,6 +260,7 @@ class GetPhaseogram(luigi.Task):
                 parfile,
                 ephem=ephem,
                 return_sec_from_mjdstart=True,
+                ntimes=ntimes_for_approximation,
             )
 
             times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
@@ -313,6 +318,7 @@ class GetPhaseogram(luigi.Task):
             result_table.meta["mjdstart"] = mjdstart
             result_table.meta["mjdstop"] = mjdstop
             result_table.meta["mjd"] = (mjdstop + mjdstart) / 2
+            result_table.meta["model_conversion_rms"] = model.TRES.value
 
             new_file_name = output_name(
                 self.fname, self.version, f"_dynprof_{subprofile_count:000d}.hdf5"
@@ -390,22 +396,27 @@ class GetPulseFreq(luigi.Task):
                 + secs_from_pepoch * model.F1.value
                 + 0.5 * secs_from_pepoch**2 * model.F2.value
             )
-            f0_err = 2 / length
-            frequency_range = [central_freq - f0_err, central_freq + f0_err]
+            central_fdot = model.F1.value + secs_from_pepoch * model.F2.value
+            f0_err = 0.8 / length
+            frequency_range = [central_freq - f0_err / 2, central_freq + f0_err / 2]
 
             log.info(
                 f"Searching for pulsations in interval {frequency_range[0]}-{frequency_range[1]}"
             )
             log.info(f"The central frequency is {central_freq}")
 
-            frequencies, stats, step, length = search_with_qffa(
+            results = search_with_qffa(
                 events_to_analyze,
                 *frequency_range,
+                fdot=central_fdot,
                 nbin=nbin,
+                npfact=1,
                 n=N,
-                search_fdot=False,
-                oversample=nbin // 2,
+                search_fdot=True,
+                oversample=N * 8,
             )
+            frequencies, fdots, stats, step, fdotsteps, length = results
+
             efperiodogram = EFPeriodogram(
                 frequencies,
                 stats,
@@ -413,8 +424,9 @@ class GetPulseFreq(luigi.Task):
                 nbin,
                 N,
                 mjdref=events.mjdref,
-                pepoch=ref_time,
+                pepoch=ref_mjd,
                 oversample=N * 8,
+                fdots=fdots,
             )
             efperiodogram.upperlim = pf_upper_limit(np.max(stats), events.time.size, n=N)
             efperiodogram.ncounts = events.time.size
@@ -427,6 +439,7 @@ class GetPulseFreq(luigi.Task):
             ]
 
             best_cand_table["initial_freq_estimate"] = central_freq
+            best_cand_table["fname"] = self.fname
             log.info(best_cand_table[0])
             result_table.append(best_cand_table[0])
         result_table = vstack(result_table)
@@ -454,6 +467,11 @@ class GetParfile(luigi.Task):
             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
+        config_file = self.config_file
+        config = load_yaml_file(config_file)
+        if "format" not in config:
+            config["format"] = "cgro"
+
         ephem = info["ephem"]
         crab_names = ["crab", "b0531+21", "j0534+22"]
         found_crab = False
@@ -470,21 +488,26 @@ class GetParfile(luigi.Task):
         force_parameters = None
         if "ra_bary" in info and info["ra_bary"] is not None:
             log.info("Trying to set coordinates to the values found in the FITS file header")
+            frame = info["frame"]
+
+            coords = SkyCoord(info["ra_bary"] * u.deg, info["dec_bary"] * u.deg, frame=frame)
+            log.info(f"{ephem}: using coordinates from the FITS file header: {coords}")
+
             force_parameters = {
                 "RAJ": info["ra_bary"] * u.deg,
                 "DECJ": info["dec_bary"] * u.deg,
             }
 
-        model1 = get_crab_ephemeris(
-            info["mjdstart"], ephem=ephem, force_parameters=force_parameters
-        )
-        model2 = get_crab_ephemeris(info["mjdstop"], ephem=ephem, force_parameters=force_parameters)
+        line1 = get_best_cgro_row(info["mjdstart"])
+        line2 = get_best_cgro_row(info["mjdstop"])
 
-        if model1.PEPOCH.value != model2.PEPOCH.value:
+        if line1["MJD1"] != line2["MJD1"]:
             warnings.warn(f"Different models for start and stop of {self.fname}")
             n_months = max(np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int), 2)
             models = [
-                get_crab_ephemeris(mjd, ephem=ephem, force_parameters=force_parameters)
+                get_crab_ephemeris(
+                    mjd, ephem=ephem, force_parameters=force_parameters, format=config["format"]
+                )
                 for mjd in np.linspace(info["mjdstart"], info["mjdstop"], n_months)
             ]
             fname_root = fname.replace(".txt", "")
@@ -501,7 +524,13 @@ class GetParfile(luigi.Task):
                     count += 1
         else:
             fname1 = fname.replace(".txt", ".par")
-            model1.write_parfile(fname1, include_info=False)
+            model = get_crab_ephemeris(
+                info["mjdstart"],
+                ephem=ephem,
+                force_parameters=force_parameters,
+                format=config["format"],
+            )
+            model.write_parfile(fname1, include_info=False)
             parfiles = [fname1]
 
         with open(fname, "w") as fobj:

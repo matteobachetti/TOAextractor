@@ -266,7 +266,7 @@ def default_crab_model(init_pars=None, frozen=None):
     if frozen is not None:
         for key in frozen:
             if key in model_init.param_names:
-                print("Freezing", key)
+                log.info(f"Freezing {key}")
                 getattr(model_init, key).fixed = True
     return model_init
 
