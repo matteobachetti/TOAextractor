@@ -23,7 +23,7 @@ from stingray.io import FITSTimeseriesReader
 from stingray.pulse.pulsar import get_model
 
 from .utils import output_name
-from .utils.config import get_template, load_yaml_file
+from .utils.config import get_template, load_yaml_file, read_config
 
 # from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris, get_best_cgro_row
@@ -180,6 +180,8 @@ class GetPhaseogram(luigi.Task):
         infofile = (
             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
+        config = read_config(self.config_file)
+        ntimes_for_approximation = config.get("ntimes_for_approximation", 1000)
         info = load_yaml_file(infofile)
 
         ephem = info["ephem"]
@@ -258,6 +260,7 @@ class GetPhaseogram(luigi.Task):
                 parfile,
                 ephem=ephem,
                 return_sec_from_mjdstart=True,
+                ntimes=ntimes_for_approximation,
             )
 
             times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
