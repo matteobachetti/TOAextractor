@@ -1,7 +1,7 @@
 import numpy as np
 from astropy.table import Table
 from numba import njit
-from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline
 from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
 from stingray.utils import histogram2d
 
@@ -181,4 +181,4 @@ def get_phase_func_from_ephemeris_file(
         return_sec_from_mjdstart=return_sec_from_mjdstart,
     )
 
-    return interp1d(times, phases, fill_value="extrapolate")
+    return CubicSpline(times, phases, extrapolate=True)
