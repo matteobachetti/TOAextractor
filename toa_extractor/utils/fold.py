@@ -140,8 +140,8 @@ def get_phase_from_ephemeris_file(
     if mjdstop > m.FINISH.value:
         warnings.warn(f"End of the observation {mjdstop} is after the model end {m.FINISH.value}")
 
-    log.info(f"Calculating reference phases for {len(mjds)} MJDs from {mjdstart} to {mjdstop}.")
     mjds = np.linspace(mjdstart, mjdstop, ntimes)
+    log.info(f"Calculating reference phases for {ntimes} MJDs from {mjdstart} to {mjdstop}.")
 
     toalist = prepare_TOAs(mjds, ephem)
 
