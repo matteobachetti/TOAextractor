@@ -131,9 +131,9 @@ def get_phase_from_ephemeris_file(
 
     parfile = parfile
     m = get_model(parfile)
-    m0, m1 = max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value)
-    mjds = np.linspace(m0, m1, ntimes)
-    log.info(f"Calculating reference phases for {len(mjds)} MJDs from {m0} to {m1}.")
+
+    log.info(f"Calculating reference phases for {len(mjds)} MJDs from {mjdstart} to {mjdstop}.")
+    mjds = np.linspace(mjdstart, mjdstop, ntimes)
 
     toalist = prepare_TOAs(mjds, ephem)
 
