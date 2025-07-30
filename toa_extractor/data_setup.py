@@ -227,7 +227,7 @@ class GetPhaseogram(luigi.Task):
         nphotons = fitsreader.nphot
         log.info(f"Number of photons in the observation: {nphotons}.")
         # If nphotons is too high, further split the intervals
-        photon_max = config.get("photon_max", 5_000_000)  # soft upper limit
+        photon_max = config.get("photon_max", 50_000_000)  # soft upper limit
         max_exposure = np.inf
         if nphotons > photon_max * 1.5:
             max_exposure = fitsreader.exposure * photon_max / nphotons
