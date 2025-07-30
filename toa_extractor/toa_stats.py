@@ -41,7 +41,7 @@ def get_toa_stats(
                     comb1 = subsub[subsub["ephem"] == comb[1]]
                     diffs[val] = comb0["fit_residual"] - comb1["fit_residual"]
                     diffs[val + "_err"] = np.sqrt(
-                        comb0["fit_residual_err"] ** 2 - comb1["fit_residual_err"] ** 2
+                        comb0["fit_residual_err"] ** 2 + comb1["fit_residual_err"] ** 2
                     )
                     ephem_cols.extend([val, val + "_err"])
 
