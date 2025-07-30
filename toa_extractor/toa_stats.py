@@ -29,11 +29,19 @@ def get_toa_stats(
         subtable = subtable.group_by(["obsid", "rough_mjd", "ephem"]).groups.aggregate(np.mean)
         subsubtable_list = []
         ephem_cols = []
+
         for subsub in subtable.group_by(["obsid", "rough_mjd"]).groups:
             print(subsub["rough_mjd", "ephem", "obsid"])
             if len(subsub) > 1:
-                combs = list(combinations(set(subsub["ephem"]), 2))
+                available_ephems = np.unique(subsub["ephem"])
+                combs = list(combinations(available_ephems, 2))
                 diffs = {}
+                for eph in available_ephems:
+                    subsub_eph = subsub[subsub["ephem"] == eph]
+                    diffs[eph + "_fit_residual"] = subsub_eph["fit_residual"]
+                    diffs[eph + "_fit_residual_err"] = subsub_eph["fit_residual_err"]
+                    ephem_cols.extend([eph + "_fit_residual", eph + "_fit_residual_err"])
+
                 for comb in combs:
                     comb = sorted(comb)
                     val = f"{comb[0]}_minus_{comb[1]}"
@@ -43,6 +51,7 @@ def get_toa_stats(
                     diffs[val + "_err"] = np.sqrt(
                         comb0["fit_residual_err"] ** 2 + comb1["fit_residual_err"] ** 2
                     )
+
                     ephem_cols.extend([val, val + "_err"])
 
             else:
