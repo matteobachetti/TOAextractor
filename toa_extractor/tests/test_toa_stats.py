@@ -44,7 +44,7 @@ def test_get_toa_stats():
     assert os.path.exists(outfname.replace(".csv", "_nustar_fpma.csv"))
     assert os.path.exists(outfname.replace(".csv", "_nicer_xti.csv"))
 
-    assert np.isnan(table[r"$\sigma$ (us)"][0])
+    assert table[r"$\sigma$ (us)"][0] == "--"
 
     # Check if the summary file was created and read correctly
     assert os.path.exists(outfname)
