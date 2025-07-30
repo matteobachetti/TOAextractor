@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 from astropy.table import Table
 from numba import njit
@@ -131,6 +132,13 @@ def get_phase_from_ephemeris_file(
 
     parfile = parfile
     m = get_model(parfile)
+    log.info(f"Using {parfile} for {mjdstart} - {mjdstop}")
+    if mjdstart < m.START.value:
+        warnings.warn(
+            f"Start of the observation {mjdstart} is before the model start {m.START.value}"
+        )
+    if mjdstop > m.FINISH.value:
+        warnings.warn(f"End of the observation {mjdstop} is after the model end {m.FINISH.value}")
 
     log.info(f"Calculating reference phases for {len(mjds)} MJDs from {mjdstart} to {mjdstop}.")
     mjds = np.linspace(mjdstart, mjdstop, ntimes)

@@ -252,16 +252,6 @@ class GetPhaseogram(luigi.Task):
             mean_met = (events.gti[0, 0] + events.gti[-1, 1]) / 2
             parfile = parfiles[np.argmin(np.abs(model_epochs_met - mean_met))]
 
-            log.info(f"Using {parfile} for {mjdstart} - {mjdstop}")
-            if mjdstart < model.START.value:
-                warnings.warn(
-                    f"Start of the observation {mjdstart} is before the model start {model.START.value}"
-                )
-            if mjdstop > model.FINISH.value:
-                warnings.warn(
-                    f"End of the observation {mjdstop} is after the model end {model.FINISH.value}"
-                )
-
             correction_fun = get_phase_func_from_ephemeris_file(
                 mjdstart,
                 mjdstop,
