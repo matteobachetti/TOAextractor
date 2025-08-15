@@ -96,7 +96,8 @@ def get_toa_stats(
             f"{mission.lower()}/{instrument.lower()}",
             0 * u.us,
         ).to_value(u.s)
-        print(f"{mission}/{instrument} offset (us): {1e6 * offset:.2f}")
+
+        print(f"{mission}/{instrument} offset (us): {1e6 * (offset):.2f}")
         label = "*" if np.abs(offset) > 0 else ""
 
         if n_meas < 3:
