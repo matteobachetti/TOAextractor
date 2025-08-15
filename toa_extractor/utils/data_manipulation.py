@@ -456,5 +456,6 @@ def get_observing_info(evfile, hduname=1):
         info["statsmodels_version"] = str(statsmodels.__version__)
         info["stingray_version"] = str(stingray.__version__)
         info["uncertainties_version"] = str(uncertainties.__version__)
+        info["version"] = str(toa_extractor.__version__)
 
     return info
