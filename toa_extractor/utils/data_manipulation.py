@@ -1,7 +1,25 @@
 import os
+import sys
 import warnings
 
 import numpy as np
+import astropy
+import astroquery
+import matplotlib
+import uncertainties
+import luigi
+import yaml
+import pint
+import h5py
+import bokeh
+import stingray
+import hendrics
+import pulse_deadtime_fix
+import numba
+import scipy
+import statsmodels
+import pandas
+
 from astropy import log
 from astropy.io import fits
 from stingray import EventList
@@ -419,5 +437,24 @@ def get_observing_info(evfile, hduname=1):
         MJD = float(info["mjdstart"] + info["mjdstop"]) / 2
         info["mjd"] = MJD
         info["countrate"] = float_if_not_none(ctrate)
+
+        info["astropy_version"] = astropy.__version__
+        info["astroquery_version"] = astroquery.__version__
+        info["bokeh_version"] = bokeh.__version__
+        info["hendrics_version"] = hendrics.__version__
+        info["h5py_version"] = h5py.__version__
+        info["luigi_version"] = luigi.__version__
+        info["matplotlib_version"] = matplotlib.__version__
+        info["numba_version"] = numba.__version__
+        info["numpy_version"] = np.__version__
+        info["pandas_version"] = pandas.__version__
+        info["pint_version"] = pint.__version__
+        info["pulse_deadtime_fix_version"] = pulse_deadtime_fix.__version__
+        info["pyyaml_version"] = yaml.__version__
+        info["python_version"] = sys.version.split()[0]
+        info["scipy_version"] = scipy.__version__
+        info["statsmodels_version"] = statsmodels.__version__
+        info["stingray_version"] = stingray.__version__
+        info["uncertainties_version"] = uncertainties.__version__
 
     return info
