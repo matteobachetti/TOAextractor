@@ -19,6 +19,7 @@ import numba
 import scipy
 import statsmodels
 import pandas
+import toa_extractor
 
 from astropy import log
 from astropy.io import fits
