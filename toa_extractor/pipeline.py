@@ -191,6 +191,7 @@ class TOAPipeline(luigi.Task):
         yield PlotDiagnostics(self.fname, self.config_file, self.version, self.worker_timeout)
         yield GetProfileFit(self.fname, self.config_file, self.version, self.worker_timeout)
         yield GetPhaseogram(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetPulseFreq(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_results.txt"))
@@ -211,10 +212,23 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
+        pulse_freq_file = (
+            GetPulseFreq(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
+        pulse_freq_table = Table.read(pulse_freq_file)
+        for val in ["fname"]:
+            pulse_freq_table.remove_column(val)
         image_files = list(filter(None, open(image_files_list, "r").read().splitlines()))
         image_file = image_files[0]
 
         residual_dict = load_yaml_file(residual_file)
+        for col in pulse_freq_table.colnames:
+            if not isinstance(pulse_freq_table[col][0], str):
+                residual_dict["search_" + col] = float(pulse_freq_table[col][0])
+        # residual_dict["search_stat"] = pulse_freq_table.meta["label"]
+
         profile_fit_table = Table.read(profile_fit_file)
         # best_freq_table = Table.read(best_freq_file)
         residual_dict["phase_max"] = profile_fit_table.meta["phase_max"]

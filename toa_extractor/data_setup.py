@@ -13,8 +13,9 @@ from hendrics.efsearch import (
     EFPeriodogram,
     _analyze_qffa_results,
     pf_upper_limit,
-    search_with_qffa,
+    search_with_qffa_step,
 )
+from hendrics.efsearch import get_xy_boundaries_from_level
 from pulse_deadtime_fix.core import _create_weights
 from scipy.signal import savgol_filter
 from stingray import EventList
@@ -343,7 +344,7 @@ class GetPulseFreq(luigi.Task):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_best_cands.ecsv"))
 
     def run(self):
-        N = 6
+        N = 10
         infofile = (
             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
@@ -395,51 +396,88 @@ class GetPulseFreq(luigi.Task):
                 + 0.5 * secs_from_pepoch**2 * model.F2.value
             )
             central_fdot = model.F1.value + secs_from_pepoch * model.F2.value
-            f0_err = 0.8 / length
-            frequency_range = [central_freq - f0_err / 2, central_freq + f0_err / 2]
 
             log.info(
-                f"Searching for pulsations in interval {frequency_range[0]}-{frequency_range[1]}"
+                f"Searching for pulsations around {central_freq:.6e} Hz, {central_fdot:.2e} Hz/s"
             )
-            log.info(f"The central frequency is {central_freq}")
 
-            results = search_with_qffa(
-                events_to_analyze,
-                *frequency_range,
-                fdot=central_fdot,
+            results = search_with_qffa_step(
+                np.double(events_to_analyze - ref_time),
+                mean_f=np.double(central_freq),
+                mean_fdot=np.double(central_fdot),
                 nbin=nbin,
+                nprof=nbin,
                 npfact=1,
                 n=N,
                 search_fdot=True,
                 oversample=N * 8,
             )
-            frequencies, fdots, stats, step, fdotsteps, length = results
+            frequencies, fdots, stats = results
+            step = np.median(np.diff(frequencies[:, 0]))
+            fdot_step = np.median(np.diff(fdots[:, 0]))
+
+            # import matplotlib.pyplot as plt
+
+            # plt.pcolormesh(frequencies, fdots, stats.T, shading="auto")
 
             efperiodogram = EFPeriodogram(
-                frequencies,
-                stats,
-                "Z2n",
-                nbin,
-                N,
+                freq=frequencies,
+                stat=stats,
+                kind="Z2n",
+                nbin=nbin,
+                N=N,
                 mjdref=events.mjdref,
                 pepoch=ref_mjd,
                 oversample=N * 8,
                 fdots=fdots,
             )
             efperiodogram.upperlim = pf_upper_limit(np.max(stats), events.time.size, n=N)
+
             efperiodogram.ncounts = events.time.size
-            best_cand_table = _analyze_qffa_results(efperiodogram)
-            best_cand_table["f_err_n"] = [
-                -max(step / 2, err) for err in np.abs(best_cand_table["f_err_n"])
-            ]
-            best_cand_table["f_err_p"] = [
-                max(step / 2, err) for err in np.abs(best_cand_table["f_err_p"])
-            ]
+
+            max_idx = np.unravel_index(np.argmax(efperiodogram.stat), efperiodogram.stat.shape)
+            max_stat = efperiodogram.stat[max_idx]
+            f = efperiodogram.freq[max_idx]
+            fdot = efperiodogram.fdots[max_idx]
+
+            level = max_stat * 0.8
+            fmin, fmax, fdotmin, fdotmax = get_xy_boundaries_from_level(
+                efperiodogram.freq,
+                efperiodogram.fdots,
+                efperiodogram.stat.T,
+                level,
+                f,
+                fdot,
+            )
+            best_cand_table = {}
+            best_cand_table["f"] = f
+            best_cand_table["f_err_n"] = max(np.abs(fmin - f), step / 2)
+            best_cand_table["f_err_p"] = max(np.abs(fmax - f), step / 2)
+            best_cand_table["fdot"] = fdot
+            best_cand_table["fdot_err_n"] = max(np.abs(fdotmin - fdot), fdot_step / 2)
+            best_cand_table["fdot_err_p"] = max(np.abs(fdotmax - fdot), fdot_step / 2)
+            best_cand_table["power"] = max_stat
+            best_cand_table["mjd"] = ref_mjd
+            best_cand_table["label"] = f"Z^2_{N}"
+
+            # plt.errorbar(
+            #     [best_cand_table["f"]],
+            #     [best_cand_table["fdot"]],
+            #     xerr=[
+            #         [best_cand_table["f_err_n"]],
+            #         [best_cand_table["f_err_p"]],
+            #     ],
+            #     yerr=[[best_cand_table["fdot_err_n"]], [best_cand_table["fdot_err_p"]]],
+            #     fmt="o",
+            #     zorder=10,
+            # )
+            # plt.colorbar()
+            # plt.show()
 
             best_cand_table["initial_freq_estimate"] = central_freq
             best_cand_table["fname"] = self.fname
-            log.info(best_cand_table[0])
-            result_table.append(best_cand_table[0])
+            log.info(best_cand_table)
+            result_table.append(best_cand_table)
         result_table = vstack(result_table)
         result_table.write(
             self.output().path,
