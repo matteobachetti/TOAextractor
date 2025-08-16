@@ -2,24 +2,24 @@ import os
 import sys
 import warnings
 
-import numpy as np
 import astropy
 import astroquery
-import matplotlib
-import uncertainties
-import luigi
-import yaml
-import pint
-import h5py
 import bokeh
-import stingray
+import h5py
 import hendrics
-import pulse_deadtime_fix
+import luigi
+import matplotlib
 import numba
+import numpy as np
+import pandas
+import pint
+import pulse_deadtime_fix
 import scipy
 import statsmodels
-import pandas
+import stingray
 import toa_extractor
+import uncertainties
+import yaml
 
 from astropy import log
 from astropy.io import fits
