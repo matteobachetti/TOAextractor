@@ -336,7 +336,8 @@ class GetResidual(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_residual.yaml"))

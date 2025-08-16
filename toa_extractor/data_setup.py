@@ -171,7 +171,6 @@ class GetPhaseogram(luigi.Task):
 
     def requires(self):
         yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
-        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_phaseograms.txt"))
@@ -339,7 +338,6 @@ class GetPulseFreq(luigi.Task):
 
     def requires(self):
         yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
-        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_best_cands.ecsv"))
