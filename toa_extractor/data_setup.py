@@ -341,10 +341,10 @@ class GetPulseFreq(luigi.Task):
         yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(output_name(self.fname, self.version, "_best_cands.ecsv"))
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_search.ecsv"))
 
     def run(self):
-        N = 10
+        N = 7
         infofile = (
             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
@@ -416,10 +416,6 @@ class GetPulseFreq(luigi.Task):
             step = np.median(np.diff(frequencies[:, 0]))
             fdot_step = np.median(np.diff(fdots[:, 0]))
 
-            # import matplotlib.pyplot as plt
-
-            # plt.pcolormesh(frequencies, fdots, stats.T, shading="auto")
-
             efperiodogram = EFPeriodogram(
                 freq=frequencies,
                 stat=stats,
@@ -460,19 +456,31 @@ class GetPulseFreq(luigi.Task):
             best_cand_table["mjd"] = ref_mjd
             best_cand_table["label"] = f"Z^2_{N}"
 
-            # plt.errorbar(
-            #     [best_cand_table["f"]],
-            #     [best_cand_table["fdot"]],
-            #     xerr=[
-            #         [best_cand_table["f_err_n"]],
-            #         [best_cand_table["f_err_p"]],
-            #     ],
-            #     yerr=[[best_cand_table["fdot_err_n"]], [best_cand_table["fdot_err_p"]]],
-            #     fmt="o",
-            #     zorder=10,
-            # )
-            # plt.colorbar()
-            # plt.show()
+            import matplotlib.pyplot as plt
+
+            plt.pcolormesh(frequencies, fdots, stats.T, shading="auto")
+
+            plt.errorbar(
+                [best_cand_table["f"]],
+                [best_cand_table["fdot"]],
+                xerr=[
+                    [best_cand_table["f_err_n"]],
+                    [best_cand_table["f_err_p"]],
+                ],
+                yerr=[[best_cand_table["fdot_err_n"]], [best_cand_table["fdot_err_p"]]],
+                fmt="o",
+                zorder=10,
+                cmap="Twilight",
+            )
+            plt.colorbar()
+            plt.xlabel("Frequency (Hz)")
+            plt.ylabel("Frequency derivative (Hz/s)")
+            plt.savefig(
+                self.output().path.replace(".ecsv", f"_{i:03d}.png"),
+                bbox_inches="tight",
+                dpi=300,
+            )
+            plt.close(plt.gcf())
 
             best_cand_table["initial_freq_estimate"] = central_freq
             best_cand_table["fname"] = self.fname
