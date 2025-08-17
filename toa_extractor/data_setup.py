@@ -458,7 +458,13 @@ class GetPulseFreq(luigi.Task):
 
             import matplotlib.pyplot as plt
 
-            plt.pcolormesh(frequencies, fdots, stats.T, shading="auto")
+            plt.pcolormesh(
+                frequencies,
+                fdots,
+                stats.T,
+                shading="auto",
+                cmap="twilight",
+            )
 
             plt.errorbar(
                 [best_cand_table["f"]],
@@ -470,7 +476,6 @@ class GetPulseFreq(luigi.Task):
                 yerr=[[best_cand_table["fdot_err_n"]], [best_cand_table["fdot_err_p"]]],
                 fmt="o",
                 zorder=10,
-                cmap="Twilight",
             )
             plt.colorbar()
             plt.xlabel("Frequency (Hz)")
