@@ -14,7 +14,7 @@ import pint.fitter
 import pint.simulation
 from pint.toa import get_TOAs_array
 from pint.residuals import Residuals
-from astropy import log
+from pint.logging import log
 from astropy.coordinates import SkyCoord
 from astropy.table import Table, vstack
 from pint.models import get_model
@@ -371,9 +371,9 @@ def refit_solution(
     model_new_start.EPHEM.value = new_ephem
 
     if force_parameters is not None:
-        log.info("Forcing parameters:")
+        log.debug("Forcing parameters:")
         for key, val in force_parameters.items():
-            log.info(f"{key} = {val}")
+            log.debug(f"{key} = {val}")
             if not isinstance(val, Iterable) or isinstance(val, str) or isinstance(val, u.Quantity):
                 val = [val]
             par = getattr(model_new_start, key)
@@ -398,9 +398,9 @@ def refit_solution(
     )
     # But change the ephemeris to the new one
     fake_geo_toas.ephem = new_ephem
-    log.info(f"TOAs: {fake_geo_toas.get_summary()}")
+    log.debug(f"TOAs: {fake_geo_toas.get_summary()}")
 
-    log.info(str(model_200.compare(model_new_start)))
+    log.debug(str(model_200.compare(model_new_start)))
     if plot:
         r = Residuals(fake_geo_toas, model_new_start, subtract_mean=False, track_mode="nearest")
 
@@ -440,7 +440,7 @@ def refit_solution(
     new_model.components["AbsPhase"].make_TZR_toa(fake_geo_toas)
     new_model.TZRSITE.value = "0"
     new_model.PHOFF.quantity = current_phoff
-    log.info(str(new_model.compare(model_200)))
+    log.debug(str(new_model.compare(model_200)))
     new_model.write_parfile(fname, include_info=False)
     return new_model
 

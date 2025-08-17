@@ -1,12 +1,12 @@
 import copy
 import os
 import random
-
+import pint.logging
 import luigi
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from astropy import log
+from pint.logging import log
 from astropy.table import Table
 from hendrics.ml_timing import ml_pulsefit, normalized_template
 
@@ -512,6 +512,8 @@ def main(args=None):
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
     parser.add_argument("--config", help="Config file", type=str, default=None)
+    parser.add_argument("--loglevel", help="Set log level", type=str, default="INFO")
+    parser.add_argument("--debug", help="Enable debug mode", action="store_true")
     parser.add_argument("-v", "--version", help="Version", type=str, default="none")
     parser.add_argument(
         "-N",
@@ -522,6 +524,14 @@ def main(args=None):
     )
 
     args = parser.parse_args(args)
+
+    log_level = args.loglevel.upper()
+    if args.debug:
+        log_level = "DEBUG"
+        log.info("Enabling debug mode")
+
+    pint.logging.setup(level=log_level)
+    log.debug(f"Log level set to {log_level}")
 
     config_file = args.config
     if config_file is None:
@@ -566,6 +576,8 @@ def main_freq(args=None):
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
     parser.add_argument("--config", help="Config file", type=str, default=None)
+    parser.add_argument("--loglevel", help="Set log level", type=str, default="INFO")
+    parser.add_argument("--debug", help="Enable debug mode", action="store_true")
     parser.add_argument("-v", "--version", help="Version", type=str, default="none")
     parser.add_argument(
         "-N",
@@ -576,6 +588,13 @@ def main_freq(args=None):
     )
 
     args = parser.parse_args(args)
+
+    log_level = args.loglevel.upper()
+    if args.debug:
+        log_level = "DEBUG"
+        log.debug("Debug mode enabled")
+
+    pint.logging.setup(level=log_level)
 
     config_file = args.config
     if config_file is None:

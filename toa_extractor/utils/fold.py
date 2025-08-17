@@ -5,7 +5,7 @@ from numba import njit
 from scipy.interpolate import CubicSpline
 from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
 from stingray.utils import histogram2d
-from astropy import log
+from pint.logging import log
 
 ONE_SIXTH = 1 / 6
 

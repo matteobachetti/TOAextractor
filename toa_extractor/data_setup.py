@@ -5,7 +5,7 @@ import luigi
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from astropy import log
+from pint.logging import log
 from astropy import units as u
 from astropy.table import Table, vstack
 from astropy.coordinates import SkyCoord
@@ -199,7 +199,7 @@ class GetPhaseogram(luigi.Task):
         # Read list of file ignoring blank lines
         parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
 
-        log.info("Relevant parameter files: " + ",".join(parfiles))
+        log.debug("Relevant parameter files: " + ",".join(parfiles))
 
         model_epochs = np.asarray([get_model(p).PEPOCH.value for p in parfiles])
 
@@ -225,7 +225,7 @@ class GetPhaseogram(luigi.Task):
             obs_will_be_split = True
 
         nphotons = fitsreader.nphot
-        log.info(f"Number of photons in the observation: {nphotons}.")
+        log.debug(f"Number of photons in the observation: {nphotons}.")
         # If nphotons is too high, further split the intervals
         photon_max = config.get("photon_max", 50_000_000)  # soft upper limit
         max_exposure = np.inf
@@ -291,7 +291,7 @@ class GetPhaseogram(luigi.Task):
             if events.instr is not None and events.instr.lower() in list(
                 _RATE_CORRECTION_FUNC.keys()
             ):
-                log.info(f"Instrument: {events.instr}")
+                log.debug(f"Instrument: {events.instr}")
                 # HRC
                 log.info(f"Using {events.instr} rate correction")
                 tot_prof = np.sum(result_table["profile"], axis=0)
@@ -489,7 +489,7 @@ class GetPulseFreq(luigi.Task):
 
             best_cand_table["initial_freq_estimate"] = central_freq
             best_cand_table["fname"] = self.fname
-            log.info(best_cand_table)
+            log.debug(best_cand_table)
             result_table.append(best_cand_table)
         result_table = vstack(result_table)
         result_table.write(
@@ -536,7 +536,6 @@ class GetParfile(luigi.Task):
         fname = self.output().path
         force_parameters = None
         if "ra_bary" in info and info["ra_bary"] is not None:
-            log.info("Trying to set coordinates to the values found in the FITS file header")
             frame = info["frame"]
 
             coords = SkyCoord(info["ra_bary"] * u.deg, info["dec_bary"] * u.deg, frame=frame)

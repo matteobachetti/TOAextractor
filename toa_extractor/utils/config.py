@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 
 import yaml
-from astropy import log
+from pint.logging import log
 from yaml import Loader, load
 
 NOT_AVLB = "N/A"

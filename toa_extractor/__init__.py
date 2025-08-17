@@ -4,12 +4,10 @@
 # should keep this content at the top.
 # ----------------------------------------------------------------------------
 import warnings
-import pint.logging
 from pint.utils import check_longdouble_precision
 
 from ._astropy_init import *  # noqa
 
-pint.logging.setup(level="INFO")
 # ----------------------------------------------------------------------------
 
 __all__ = []

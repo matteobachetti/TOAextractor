@@ -21,7 +21,7 @@ import toa_extractor
 import uncertainties
 import yaml
 
-from astropy import log
+from pint.logging import log
 from astropy.io import fits
 from stingray import EventList
 from stingray.io import (

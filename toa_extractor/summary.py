@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from astropy import log
+from pint.logging import log
 
 from .utils.config import load_yaml_file
 
