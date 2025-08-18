@@ -359,10 +359,17 @@ def get_observing_info(evfile, hduname=1):
         hdu = hdul[hduname]
         header = hdu.header
 
+        nphot = header["NAXIS2"]
+        if nphot == 0:
+            raise ValueError(f"No photons found in {evfile} in HDU {hduname}")
+
         if "EXPOSURE" in header:
             exposure = header["EXPOSURE"]
         elif "TSTOP" in header and "TSTART" in header:
             exposure = header["TSTOP"] - header["TSTART"]
+
+        if exposure <= 0:
+            raise ValueError(f"Invalid or zero exposure time in {evfile} in HDU {hduname}")
 
         ctrate = header["NAXIS2"] / exposure
 
