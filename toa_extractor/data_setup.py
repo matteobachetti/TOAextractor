@@ -9,9 +9,9 @@ from pint.logging import log
 from astropy import units as u
 from astropy.table import Table, vstack
 from astropy.coordinates import SkyCoord
+
 from hendrics.efsearch import (
     EFPeriodogram,
-    _analyze_qffa_results,
     pf_upper_limit,
     search_with_qffa_step,
 )
@@ -454,8 +454,6 @@ class GetPulseFreq(luigi.Task):
             best_cand_table["power"] = max_stat
             best_cand_table["mjd"] = ref_mjd
             best_cand_table["label"] = f"Z^2_{N}"
-
-            import matplotlib.pyplot as plt
 
             plt.pcolormesh(
                 frequencies,
