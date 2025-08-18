@@ -21,9 +21,7 @@ import toa_extractor
 import uncertainties
 import yaml
 
-from pint.logging import log
 from astropy.io import fits
-from stingray import EventList
 from stingray.io import (
     get_key_from_mission_info,
     high_precision_keyword_read,
