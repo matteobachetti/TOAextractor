@@ -214,7 +214,7 @@ def load_events_and_gtis(
     if column is None:
         column = get_key_from_mission_info(db, "time", "TIME", instr, mode)
 
-    if column not in datatable.columns.names:
+    if column.lower() not in [col.lower() for col in datatable.columns.names]:
         if "TDB" in datatable.columns.names:
             column = "TDB"
         else:
@@ -320,35 +320,6 @@ def load_events_and_gtis(
     returns.timesys = timesys
 
     return returns
-
-
-def get_events_from_fits(evfile, max_events=5000000, additional_columns=["PRIOR"]):
-    log.info(f"Opening file {evfile}")
-
-    evtdata = load_events_and_gtis(
-        evfile, max_events=max_events, additional_columns=additional_columns
-    )
-
-    evt = EventList(
-        time=evtdata.ev_list,
-        gti=evtdata.gti_list,
-        pi=evtdata.pi_list,
-        energy=evtdata.energy_list,
-        mjdref=evtdata.mjdref,
-        instr=evtdata.instr,
-        mission=evtdata.mission,
-        header=evtdata.header,
-        detector_id=evtdata.detector_id,
-        ephem=evtdata.ephem,
-        timeref=evtdata.timeref,
-        timesys=evtdata.timesys,
-    )
-
-    if additional_columns is not None and len(additional_columns) > 0:
-        for key in evtdata.additional_data:
-            if not hasattr(evt, key.lower()):
-                setattr(evt, key.lower(), evtdata.additional_data[key])
-    return evt
 
 
 def calibrate_events(events, rmf_file):

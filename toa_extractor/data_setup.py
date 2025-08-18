@@ -28,7 +28,7 @@ from .utils.config import get_template, load_yaml_file, read_config
 
 # from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris, get_best_cgro_row
-from .utils.data_manipulation import get_events_from_fits, get_observing_info
+from .utils.data_manipulation import get_observing_info
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 
 
@@ -360,7 +360,12 @@ class GetPulseFreq(luigi.Task):
 
     def run(self):
         N = 7
-        events = get_events_from_fits(self.fname)
+
+        fitsreader = FITSTimeseriesReader(self.fname, output_class=EventList)
+        events = fitsreader[:]
+        if hasattr(events, "tdb"):
+            events.time = events.tdb
+
         tstart, tstop = events.time[0], events.time[-1]
         mjdstart, mjdstop = tstart / 86400 + events.mjdref, tstop / 86400 + events.mjdref
         parfile_list = (
