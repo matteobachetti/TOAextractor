@@ -345,12 +345,9 @@ class GetPulseFreq(luigi.Task):
 
     def run(self):
         N = 7
-        infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
-        )
-        info = load_yaml_file(infofile)
         events = get_events_from_fits(self.fname)
-        mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
+        tstart, tstop = events.time[0], events.time[-1]
+        mjdstart, mjdstop = tstart / 86400 + events.mjdref, tstop / 86400 + events.mjdref
         parfile_list = (
             GetParfile(
                 self.fname,
@@ -376,7 +373,10 @@ class GetPulseFreq(luigi.Task):
 
         result_table = []
         for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
-            if edge_idxs[i] >= events.time.size:
+            log.info(
+                f"Analyzing MJD interval {mjdstart} - {mjdstop} ({i + 1}/{len(mjd_edges) - 1})"
+            )
+            if edge_idxs[i] >= events.time.size or np.diff(edge_idxs) == 0:
                 warnings.warn("No events in this interval")
                 continue
 
@@ -384,7 +384,6 @@ class GetPulseFreq(luigi.Task):
 
             good = slice(edge_idxs[i], edge_idxs[i + 1])
             events_to_analyze = events.time[good]
-            length = events_to_analyze[-1] - events_to_analyze[0]
 
             ref_time = (events_to_analyze[-1] + events_to_analyze[0]) / 2
             ref_mjd = ref_time / 86400 + events.mjdref
