@@ -213,15 +213,30 @@ class GetPhaseogram(luigi.Task):
         )
 
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
+
         current_gtis = fitsreader.gti
         if current_gtis is None:
             current_gtis = np.array([[fitsreader.time[0], fitsreader.time[-1]]])
             fitsreader.gti = current_gtis
+        current_gtis = np.sort(current_gtis, axis=0)
 
         obs_will_be_split = False
         split_at_edges = []
         if len(set(model_epochs_met)) > 1:
             split_at_edges = (model_epochs_met[1:] + model_epochs_met[:-1]) / 2
+
+        # Solve corner cases where the first GTI starts after the first split edge
+        while len(split_at_edges) > 0 and split_at_edges[0] < current_gtis[0, 0]:
+            split_at_edges = split_at_edges[1:]
+            model_epochs_met = model_epochs_met[1:]
+            parfiles = parfiles[1:]
+
+        while len(split_at_edges) > 0 and split_at_edges[-1] > current_gtis[-1, 1]:
+            split_at_edges = split_at_edges[:-1]
+            model_epochs_met = model_epochs_met[:-1]
+            parfiles = parfiles[:-1]
+
+        if len(split_at_edges) > 0:
             obs_will_be_split = True
 
         nphotons = fitsreader.nphot
@@ -376,7 +391,7 @@ class GetPulseFreq(luigi.Task):
             log.info(
                 f"Analyzing MJD interval {mjdstart} - {mjdstop} ({i + 1}/{len(mjd_edges) - 1})"
             )
-            if edge_idxs[i] >= events.time.size or np.diff(edge_idxs) == 0:
+            if edge_idxs[i] >= events.time.size or np.diff(edge_idxs[i : i + 2]) == 0:
                 warnings.warn("No events in this interval")
                 continue
 
