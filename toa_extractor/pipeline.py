@@ -515,6 +515,7 @@ def main(args=None):
     parser.add_argument("--loglevel", help="Set log level", type=str, default="INFO")
     parser.add_argument("--debug", help="Enable debug mode", action="store_true")
     parser.add_argument("-v", "--version", help="Version", type=str, default="none")
+    parser.add_argument("--local-scheduler", help="Use local scheduler", action="store_true")
     parser.add_argument(
         "-N",
         "--nmax",
@@ -563,7 +564,7 @@ def main(args=None):
             )
             for fname in fnames
         ],
-        local_scheduler=True,
+        local_scheduler=args.local_scheduler,
         log_level="INFO",
         workers=4,
     )
@@ -579,6 +580,7 @@ def main_freq(args=None):
     parser.add_argument("--loglevel", help="Set log level", type=str, default="INFO")
     parser.add_argument("--debug", help="Enable debug mode", action="store_true")
     parser.add_argument("-v", "--version", help="Version", type=str, default="none")
+    parser.add_argument("--local-scheduler", help="Use local scheduler", action="store_true")
     parser.add_argument(
         "-N",
         "--nmax",
@@ -618,7 +620,7 @@ def main_freq(args=None):
 
     _ = luigi.build(
         [GetPulseFreq(fname, config_file, args.version) for fname in fnames],
-        local_scheduler=True,
+        local_scheduler=args.local_scheduler,
         log_level="INFO",
         workers=4,
     )
