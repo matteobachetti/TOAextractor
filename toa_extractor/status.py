@@ -23,6 +23,9 @@ def main(args=None):
     processed = 0
     unprocessed = 0
     for fname in args.files:
+        if not os.path.exists(fname):
+            print(f"File {fname} does not exist. Skipping.")
+            continue
         res_file = TOAPipeline(fname, args.config, args.version, 10).output().path
         if os.path.exists(res_file):
             print(fname, "-->", res_file)

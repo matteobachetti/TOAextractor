@@ -191,7 +191,7 @@ class TOAPipeline(luigi.Task):
         yield PlotDiagnostics(self.fname, self.config_file, self.version, self.worker_timeout)
         yield GetProfileFit(self.fname, self.config_file, self.version, self.worker_timeout)
         yield GetPhaseogram(self.fname, self.config_file, self.version, self.worker_timeout)
-        yield GetPulseFreq(self.fname, self.config_file, self.version, self.worker_timeout)
+        # yield GetPulseFreq(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_results.txt"))
