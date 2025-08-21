@@ -17,9 +17,11 @@ def main(args=None):
         default=None,
     )
     parser.add_argument(
-        "--processed-output", help="Output file for processed events", type=str, default=None
+        "--processed-output",
+        help="Output file for list of yaml result files",
+        type=str,
+        default=None,
     )
-    parser.add_argument("--product-output", help="Output file for results", type=str, default=None)
 
     args = parser.parse_args(args)
 
@@ -28,14 +30,10 @@ def main(args=None):
         unprocessed_file_list = f"unprocessed_files_{args.version}.txt"
     processed_file_list = args.processed_output
     if processed_file_list is None:
-        processed_file_list = f"processed_files_{args.version}.txt"
-    product_file_list = args.product_output
-    if product_file_list is None:
-        product_file_list = f"product_files_{args.version}.txt"
+        processed_file_list = f"output_yaml_files_{args.version}.txt"
 
     unproc_fobj = open(unprocessed_file_list, "w")
     proc_fobj = open(processed_file_list, "w")
-    res_files = []
 
     processed = 0
     unprocessed = 0
@@ -46,9 +44,10 @@ def main(args=None):
         res_file = TOAPipeline(fname, args.config, args.version, 10).output().path
         if os.path.exists(res_file):
             print(fname, "-->", res_file)
-            res_files.append(res_file)
+            yaml_files = list(filter(None, open(res_file, "r").read().splitlines()))
+            for yaml_file in yaml_files:
+                print(yaml_file, file=proc_fobj)
             processed += 1
-            print(res_file, file=proc_fobj)
         else:
             print(fname, "-->", "still to process")
             unprocessed += 1
