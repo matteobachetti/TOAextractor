@@ -406,6 +406,9 @@ def get_observing_info(evfile, hduname=1):
         if "RA_BARY" in header and "bary" in header.comments["RA_BARY"]:
             info["ra_bary"] = header["RA_BARY"]
             info["dec_bary"] = header["DEC_BARY"]
+        elif "RA_TDB" in header and "bary" in header.comments["RA_TDB"]:
+            info["ra_bary"] = header["RA_TDB"]
+            info["dec_bary"] = header["DEC_TDB"]
         elif "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"]:
             info["ra_bary"] = header["RA_OBJ"]
             info["dec_bary"] = header["DEC_OBJ"]
