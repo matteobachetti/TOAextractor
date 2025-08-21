@@ -6,18 +6,35 @@ from toa_extractor.pipeline import TOAPipeline
 def main(args=None):
     parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
 
-    parser.add_argument("files", help="Input binary files", type=str, nargs="+")
+    parser.add_argument("files", help="Input event files", type=str, nargs="+")
     parser.add_argument("--config", help="Config file", type=str, default=None)
     parser.add_argument("-v", "--version", help="Version", type=str, default="none")
-    parser.add_argument("-o", "--output", help="Output file", type=str, default=None)
+    parser.add_argument(
+        "-o",
+        "--unprocessed-output",
+        help="Output file for unprocessed events",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
+        "--processed-output", help="Output file for processed events", type=str, default=None
+    )
+    parser.add_argument("--product-output", help="Output file for results", type=str, default=None)
 
     args = parser.parse_args(args)
 
-    unprocessed_file_list = args.output
+    unprocessed_file_list = args.unprocessed_output
     if unprocessed_file_list is None:
-        unprocessed_file_list = "unprocessed_files.txt"
+        unprocessed_file_list = f"unprocessed_files_{args.version}.txt"
+    processed_file_list = args.processed_output
+    if processed_file_list is None:
+        processed_file_list = f"processed_files_{args.version}.txt"
+    product_file_list = args.product_output
+    if product_file_list is None:
+        product_file_list = f"product_files_{args.version}.txt"
 
-    fobj = open(unprocessed_file_list, "w")
+    unproc_fobj = open(unprocessed_file_list, "w")
+    proc_fobj = open(processed_file_list, "w")
     res_files = []
 
     processed = 0
@@ -31,11 +48,14 @@ def main(args=None):
             print(fname, "-->", res_file)
             res_files.append(res_file)
             processed += 1
+            print(res_file, file=proc_fobj)
         else:
             print(fname, "-->", "still to process")
             unprocessed += 1
-            print(fname, file=fobj)
+            print(fname, file=unproc_fobj)
 
-    fobj.close()
+    unproc_fobj.close()
+    proc_fobj.close()
+
     print(f"Processed {processed}/{len(args.files)} files.")
     print(f"{unprocessed} files still to process.")
