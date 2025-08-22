@@ -27,7 +27,7 @@ from stingray.io import (
     high_precision_keyword_read,
     read_mission_info,
 )
-
+from pint.logging import log
 from . import safe_get_key
 
 
@@ -403,13 +403,16 @@ def get_observing_info(evfile, hduname=1):
         info["ra"] = float_if_not_none(safe_get_key(header, "RA_OBJ", None))
         info["dec"] = float_if_not_none(safe_get_key(header, "DEC_OBJ", None))
         info["ra_bary"] = info["dec_bary"] = None
-        if "RA_BARY" in header and "bary" in header.comments["RA_BARY"]:
+        if "RA_BARY" in header and "bary" in header.comments["RA_BARY"].lower():
+            log.info("Barycentric coordinates found in RA_BARY and DEC_BARY")
             info["ra_bary"] = header["RA_BARY"]
             info["dec_bary"] = header["DEC_BARY"]
-        elif "RA_TDB" in header and "bary" in header.comments["RA_TDB"]:
+        elif "RA_TDB" in header and "bary" in header.comments["RA_TDB"].lower():
+            log.info("Barycentric coordinates found in RA_TDB and DEC_TDB")
             info["ra_bary"] = header["RA_TDB"]
             info["dec_bary"] = header["DEC_TDB"]
-        elif "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"]:
+        elif "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"].lower():
+            log.info("Barycentric coordinates found in RA_OBJ and DEC_OBJ")
             info["ra_bary"] = header["RA_OBJ"]
             info["dec_bary"] = header["DEC_OBJ"]
         info["mjdstart"] = float_if_not_none(info["tstart"] / 86400 + mjdref_highprec)
