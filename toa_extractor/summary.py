@@ -18,6 +18,9 @@ def main(args=None):
     result_table = None
     for fname in args.files:
         log.info(f"Processing {fname}")
+        if not os.path.exists(fname):
+            log.warning(f"File {fname} does not exist.")
+            continue
         info = load_yaml_file(fname)
         new_info = dict([(key, [val]) for key, val in info.items()])
         for arr in ["phase", "expo"]:
