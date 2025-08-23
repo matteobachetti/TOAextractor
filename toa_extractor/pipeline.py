@@ -549,16 +549,14 @@ def main(args=None):
         dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
         fnames = []
         for d in dirs:
-            good_files = [
-                f
-                for f in args.files
-                if (
-                    f.startswith(d)
-                    and not os.path.exists(TOAPipeline(f, config_file, args.version).output().path)
-                )
-            ]
-            if len(good_files) > args.nmax:
-                good_files = random.sample(good_files, k=args.nmax)
+            files_in_dir = [f for f in args.files if f.startswith(d)]
+            good_files = []
+
+            while len(good_files) < args.nmax:
+                f = random.choice(files_in_dir)
+                if not os.path.exists(TOAPipeline(f, config_file, args.version).output().path):
+                    good_files.append(f)
+
             fnames += good_files
 
     _ = luigi.build(
@@ -620,16 +618,14 @@ def main_freq(args=None):
         dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
         fnames = []
         for d in dirs:
-            good_files = [
-                f
-                for f in args.files
-                if (
-                    f.startswith(d)
-                    and not os.path.exists(TOAPipeline(f, config_file, args.version).output().path)
-                )
-            ]
-            if len(good_files) > args.nmax:
-                good_files = random.sample(good_files, k=args.nmax)
+            files_in_dir = [f for f in args.files if f.startswith(d)]
+            good_files = []
+
+            while len(good_files) < args.nmax:
+                f = random.choice(files_in_dir)
+                if not os.path.exists(TOAPipeline(f, config_file, args.version).output().path):
+                    good_files.append(f)
+
             fnames += good_files
 
     _ = luigi.build(
