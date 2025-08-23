@@ -557,6 +557,8 @@ def main(args=None):
             else:
                 count_processed = 0
                 while len(good_files) < max(args.nmax, len(files_in_dir)):
+                    if len(files_in_dir) == 0:
+                        break
                     f = random.choice(files_in_dir)
                     res = TOAPipeline(f, config_file, args.version).output().path
                     exists = os.path.exists(res)
@@ -635,6 +637,8 @@ def main_freq(args=None):
             else:
                 count_processed = 0
                 while len(good_files) < max(args.nmax, len(files_in_dir)):
+                    if len(files_in_dir) == 0:
+                        break
                     f = random.choice(files_in_dir)
                     res = TOAPipeline(f, config_file, args.version).output().path
                     exists = os.path.exists(res)
