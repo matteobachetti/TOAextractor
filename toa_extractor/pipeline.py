@@ -556,19 +556,17 @@ def main(args=None):
                 good_files = files_in_dir
             else:
                 count_processed = 0
-                while (
-                    len(good_files) < max(args.nmax, len(files_in_dir))
-                    and count_processed
-                    < 2 * args.nmax  # Avoid infinite loop while looking for new files
-                ):
+                while len(good_files) < max(args.nmax, len(files_in_dir)):
                     f = random.choice(files_in_dir)
                     res = TOAPipeline(f, config_file, args.version).output().path
                     exists = os.path.exists(res)
                     if not exists and not f in good_files:
                         good_files.append(f)
+                        files_in_dir.remove(f)
                     else:
                         log.info(f"File {f} already processed")
                         count_processed += 1
+                        files_in_dir.remove(f)
 
     _ = luigi.build(
         [
@@ -636,19 +634,17 @@ def main_freq(args=None):
                 good_files = files_in_dir
             else:
                 count_processed = 0
-                while (
-                    len(good_files) < max(args.nmax, len(files_in_dir))
-                    and count_processed
-                    < 2 * args.nmax  # Avoid infinite loop while looking for new files
-                ):
+                while len(good_files) < max(args.nmax, len(files_in_dir)):
                     f = random.choice(files_in_dir)
                     res = TOAPipeline(f, config_file, args.version).output().path
                     exists = os.path.exists(res)
                     if not exists and not f in good_files:
                         good_files.append(f)
+                        files_in_dir.remove(f)
                     else:
                         log.info(f"File {f} already processed")
                         count_processed += 1
+                        files_in_dir.remove(f)
 
             fnames += good_files
 
