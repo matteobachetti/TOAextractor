@@ -552,12 +552,23 @@ def main(args=None):
             files_in_dir = [f for f in args.files if f.startswith(d)]
             good_files = []
 
-            while len(good_files) < args.nmax:
-                f = random.choice(files_in_dir)
-                if not os.path.exists(TOAPipeline(f, config_file, args.version).output().path):
-                    good_files.append(f)
-
-            fnames += good_files
+            if len(files_in_dir) <= args.nmax:
+                good_files = files_in_dir
+            else:
+                count_processed = 0
+                while (
+                    len(good_files) < max(args.nmax, len(files_in_dir))
+                    and count_processed
+                    < 2 * args.nmax  # Avoid infinite loop while looking for new files
+                ):
+                    f = random.choice(files_in_dir)
+                    res = TOAPipeline(f, config_file, args.version).output().path
+                    exists = os.path.exists(res)
+                    if not exists and not f in good_files:
+                        good_files.append(f)
+                    else:
+                        log.info(f"File {f} already processed")
+                        count_processed += 1
 
     _ = luigi.build(
         [
@@ -621,10 +632,23 @@ def main_freq(args=None):
             files_in_dir = [f for f in args.files if f.startswith(d)]
             good_files = []
 
-            while len(good_files) < args.nmax:
-                f = random.choice(files_in_dir)
-                if not os.path.exists(TOAPipeline(f, config_file, args.version).output().path):
-                    good_files.append(f)
+            if len(files_in_dir) <= args.nmax:
+                good_files = files_in_dir
+            else:
+                count_processed = 0
+                while (
+                    len(good_files) < max(args.nmax, len(files_in_dir))
+                    and count_processed
+                    < 2 * args.nmax  # Avoid infinite loop while looking for new files
+                ):
+                    f = random.choice(files_in_dir)
+                    res = TOAPipeline(f, config_file, args.version).output().path
+                    exists = os.path.exists(res)
+                    if not exists and not f in good_files:
+                        good_files.append(f)
+                    else:
+                        log.info(f"File {f} already processed")
+                        count_processed += 1
 
             fnames += good_files
 
