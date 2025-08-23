@@ -1,10 +1,12 @@
 import copy
-
+import os
+import random
+import pint.logging
 import luigi
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from astropy import log
+from pint.logging import log
 from astropy.table import Table
 from hendrics.ml_timing import ml_pulsefit, normalized_template
 
@@ -12,11 +14,12 @@ from .data_setup import (
     GetInfo,
     GetPhaseogram,
     GetTemplate,
+    GetPulseFreq,
     _get_and_normalize_phaseogram,
     _plot_phaseogram,
 )
 from .utils import encode_image_file, output_name, search_substring_in_list
-from .utils.config import load_yaml_file
+from .utils.config import load_yaml_file, read_config
 from .utils.fit_crab_profiles import (
     _plot_profile_and_fit,
     create_template_from_profile_table,
@@ -188,6 +191,7 @@ class TOAPipeline(luigi.Task):
         yield PlotDiagnostics(self.fname, self.config_file, self.version, self.worker_timeout)
         yield GetProfileFit(self.fname, self.config_file, self.version, self.worker_timeout)
         yield GetPhaseogram(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetPulseFreq(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_results.txt"))
@@ -208,10 +212,23 @@ class TOAPipeline(luigi.Task):
             .output()
             .path
         )
+        pulse_freq_file = (
+            GetPulseFreq(self.fname, self.config_file, self.version, self.worker_timeout)
+            .output()
+            .path
+        )
+        pulse_freq_table = Table.read(pulse_freq_file)
+        for val in ["fname"]:
+            pulse_freq_table.remove_column(val)
         image_files = list(filter(None, open(image_files_list, "r").read().splitlines()))
         image_file = image_files[0]
 
         residual_dict = load_yaml_file(residual_file)
+        for col in pulse_freq_table.colnames:
+            if not isinstance(pulse_freq_table[col][0], str):
+                residual_dict["search_" + col] = float(pulse_freq_table[col][0])
+        # residual_dict["search_stat"] = pulse_freq_table.meta["label"]
+
         profile_fit_table = Table.read(profile_fit_file)
         # best_freq_table = Table.read(best_freq_file)
         residual_dict["phase_max"] = profile_fit_table.meta["phase_max"]
@@ -333,7 +350,8 @@ class GetResidual(luigi.Task):
     worker_timeout = luigi.IntParameter(default=600)
 
     def requires(self):
-        return GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetFoldedProfile(self.fname, self.config_file, self.version, self.worker_timeout)
+        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_residual.yaml"))
@@ -493,8 +511,11 @@ def main(args=None):
     parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
 
     parser.add_argument("files", help="Input binary files", type=str, nargs="+")
-    parser.add_argument("--config", help="Config file", type=str, default="none")
+    parser.add_argument("--config", help="Config file", type=str, default=None)
+    parser.add_argument("--loglevel", help="Set log level", type=str, default="INFO")
+    parser.add_argument("--debug", help="Enable debug mode", action="store_true")
     parser.add_argument("-v", "--version", help="Version", type=str, default="none")
+    parser.add_argument("--local-scheduler", help="Use local scheduler", action="store_true")
     parser.add_argument(
         "-N",
         "--nmax",
@@ -505,10 +526,86 @@ def main(args=None):
 
     args = parser.parse_args(args)
 
-    config_file = args.config
+    log_level = args.loglevel.upper()
+    if args.debug:
+        log_level = "DEBUG"
+        log.info("Enabling debug mode")
 
-    import os
-    import random
+    pint.logging.setup(level=log_level)
+    log.debug(f"Log level set to {log_level}")
+
+    config_file = args.config
+    if config_file is None:
+
+        config = read_config("default")
+        config_file = "default_config.yaml"
+        with open(config_file, "w") as file:
+            yaml.dump(config, file)
+
+    config = read_config(config_file)
+    fnames = args.files
+    if args.nmax is not None:
+        log.info(f"Analyzing only {args.nmax} files per directory, chosen randomly")
+        dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
+        fnames = []
+        for d in dirs:
+            good_files = [f for f in args.files if f.startswith(d)]
+            if len(good_files) > args.nmax:
+                good_files = random.sample(good_files, k=args.nmax)
+            fnames += good_files
+
+    _ = luigi.build(
+        [
+            TOAPipeline(
+                fname,
+                config_file,
+                args.version,
+                worker_timeout=config["worker_timeout"] if "worker_timeout" in config else 600,
+            )
+            for fname in fnames
+        ],
+        local_scheduler=args.local_scheduler,
+        log_level="INFO",
+        workers=4,
+    )
+
+
+def main_freq(args=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Calculate TOAs from event files")
+
+    parser.add_argument("files", help="Input binary files", type=str, nargs="+")
+    parser.add_argument("--config", help="Config file", type=str, default=None)
+    parser.add_argument("--loglevel", help="Set log level", type=str, default="INFO")
+    parser.add_argument("--debug", help="Enable debug mode", action="store_true")
+    parser.add_argument("-v", "--version", help="Version", type=str, default="none")
+    parser.add_argument("--local-scheduler", help="Use local scheduler", action="store_true")
+    parser.add_argument(
+        "-N",
+        "--nmax",
+        help="Maximum number of data files from a given directory",
+        type=int,
+        default=None,
+    )
+
+    args = parser.parse_args(args)
+
+    log_level = args.loglevel.upper()
+    if args.debug:
+        log_level = "DEBUG"
+        log.debug("Debug mode enabled")
+
+    pint.logging.setup(level=log_level)
+
+    config_file = args.config
+    if config_file is None:
+        from .utils.config import read_config
+
+        config = read_config("default")
+        config_file = "default_config.yaml"
+        with open(config_file, "w") as file:
+            yaml.dump(config, file)
 
     fnames = args.files
     if args.nmax is not None:
@@ -522,8 +619,8 @@ def main(args=None):
             fnames += good_files
 
     _ = luigi.build(
-        [TOAPipeline(fname, config_file, args.version) for fname in fnames],
-        local_scheduler=True,
+        [GetPulseFreq(fname, config_file, args.version) for fname in fnames],
+        local_scheduler=args.local_scheduler,
         log_level="INFO",
         workers=4,
     )

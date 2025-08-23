@@ -26,9 +26,8 @@ class TestPipeline(object):
             for ext in [".evt", ".fits", ".ds"]:
                 if ext not in f:
                     continue
-                main_pipe([f, "--version", version_label])
+                main_pipe([f, "--version", version_label, "--local-scheduler"])
                 outputs = get_outputs(GetResidual(f, "none", version=version_label))
-                print(outputs)
                 for outf in outputs:
                     assert os.path.exists(outf)
 

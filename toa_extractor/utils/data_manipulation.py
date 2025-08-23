@@ -1,16 +1,33 @@
 import os
+import sys
 import warnings
 
+import astropy
+import astroquery
+import bokeh
+import h5py
+import hendrics
+import luigi
+import matplotlib
+import numba
 import numpy as np
-from astropy import log
+import pandas
+import pint
+import pulse_deadtime_fix
+import scipy
+import statsmodels
+import stingray
+import toa_extractor
+import uncertainties
+import yaml
+
 from astropy.io import fits
-from stingray import EventList
 from stingray.io import (
     get_key_from_mission_info,
     high_precision_keyword_read,
     read_mission_info,
 )
-
+from pint.logging import log
 from . import safe_get_key
 
 
@@ -195,7 +212,7 @@ def load_events_and_gtis(
     if column is None:
         column = get_key_from_mission_info(db, "time", "TIME", instr, mode)
 
-    if column not in datatable.columns.names:
+    if column.lower() not in [col.lower() for col in datatable.columns.names]:
         if "TDB" in datatable.columns.names:
             column = "TDB"
         else:
@@ -303,35 +320,6 @@ def load_events_and_gtis(
     return returns
 
 
-def get_events_from_fits(evfile, max_events=5000000, additional_columns=["PRIOR"]):
-    log.info(f"Opening file {evfile}")
-
-    evtdata = load_events_and_gtis(
-        evfile, max_events=max_events, additional_columns=additional_columns
-    )
-
-    evt = EventList(
-        time=evtdata.ev_list,
-        gti=evtdata.gti_list,
-        pi=evtdata.pi_list,
-        energy=evtdata.energy_list,
-        mjdref=evtdata.mjdref,
-        instr=evtdata.instr,
-        mission=evtdata.mission,
-        header=evtdata.header,
-        detector_id=evtdata.detector_id,
-        ephem=evtdata.ephem,
-        timeref=evtdata.timeref,
-        timesys=evtdata.timesys,
-    )
-
-    if additional_columns is not None and len(additional_columns) > 0:
-        for key in evtdata.additional_data:
-            if not hasattr(evt, key.lower()):
-                setattr(evt, key.lower(), evtdata.additional_data[key])
-    return evt
-
-
 def calibrate_events(events, rmf_file):
     events.energy = read_calibration(events.pi, rmf_file)
     return events
@@ -369,10 +357,17 @@ def get_observing_info(evfile, hduname=1):
         hdu = hdul[hduname]
         header = hdu.header
 
+        nphot = header["NAXIS2"]
+        if nphot == 0:
+            raise ValueError(f"No photons found in {evfile} in HDU {hduname}")
+
         if "EXPOSURE" in header:
             exposure = header["EXPOSURE"]
         elif "TSTOP" in header and "TSTART" in header:
             exposure = header["TSTOP"] - header["TSTART"]
+
+        if exposure <= 0:
+            raise ValueError(f"Invalid or zero exposure time in {evfile} in HDU {hduname}")
 
         ctrate = header["NAXIS2"] / exposure
 
@@ -390,6 +385,16 @@ def get_observing_info(evfile, hduname=1):
         info["mjdref"] = float_if_not_none(info["mjdref_highprec"])
         info["mode"] = mode
         info["ephem"] = safe_get_key(header, "PLEPHEM", "JPL-DE200").strip().lstrip("JPL-").lower()
+        if "RADECSYS" not in header:
+            warnings.warn(
+                "RADECSYS not found in header. Assuming FK5 if the ephemeris"
+                "is JPL-DE200, and ICRS otherwise. "
+                "This may lead to incorrect results."
+            )
+            info["frame"] = "fk5" if info["ephem"] == "de200" else "icrs"
+        else:
+            info["frame"] = header["RADECSYS"].strip().lower()
+
         info["timesys"] = safe_get_key(header, "TIMESYS", "TDB").strip().lower()
         info["timeref"] = safe_get_key(header, "TIMEREF", "SOLARSYSTEM").strip().lower()
         info["tstart"] = float_if_not_none(safe_get_key(header, "TSTART", None))
@@ -398,10 +403,16 @@ def get_observing_info(evfile, hduname=1):
         info["ra"] = float_if_not_none(safe_get_key(header, "RA_OBJ", None))
         info["dec"] = float_if_not_none(safe_get_key(header, "DEC_OBJ", None))
         info["ra_bary"] = info["dec_bary"] = None
-        if "RA_BARY" in header and "bary" in header.comments["RA_BARY"]:
+        if "RA_BARY" in header and "bary" in header.comments["RA_BARY"].lower():
+            log.info("Barycentric coordinates found in RA_BARY and DEC_BARY")
             info["ra_bary"] = header["RA_BARY"]
             info["dec_bary"] = header["DEC_BARY"]
-        elif "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"]:
+        elif "RA_TDB" in header and "bary" in header.comments["RA_TDB"].lower():
+            log.info("Barycentric coordinates found in RA_TDB and DEC_TDB")
+            info["ra_bary"] = header["RA_TDB"]
+            info["dec_bary"] = header["DEC_TDB"]
+        elif "RA_OBJ" in header and "bary" in header.comments["RA_OBJ"].lower():
+            log.info("Barycentric coordinates found in RA_OBJ and DEC_OBJ")
             info["ra_bary"] = header["RA_OBJ"]
             info["dec_bary"] = header["DEC_OBJ"]
         info["mjdstart"] = float_if_not_none(info["tstart"] / 86400 + mjdref_highprec)
@@ -409,5 +420,25 @@ def get_observing_info(evfile, hduname=1):
         MJD = float(info["mjdstart"] + info["mjdstop"]) / 2
         info["mjd"] = MJD
         info["countrate"] = float_if_not_none(ctrate)
+
+        info["astropy_version"] = str(astropy.__version__)
+        info["astroquery_version"] = str(astroquery.__version__)
+        info["bokeh_version"] = str(bokeh.__version__)
+        info["hendrics_version"] = str(hendrics.__version__)
+        info["h5py_version"] = str(h5py.__version__)
+        info["luigi_version"] = str(luigi.__version__)
+        info["matplotlib_version"] = str(matplotlib.__version__)
+        info["numba_version"] = str(numba.__version__)
+        info["numpy_version"] = str(np.__version__)
+        info["pandas_version"] = str(pandas.__version__)
+        info["pint_version"] = str(pint.__version__)
+        info["pulse_deadtime_fix_version"] = str(pulse_deadtime_fix.__version__)
+        info["pyyaml_version"] = str(yaml.__version__)
+        info["python_version"] = str(sys.version.split()[0])
+        info["scipy_version"] = str(scipy.__version__)
+        info["statsmodels_version"] = str(statsmodels.__version__)
+        info["stingray_version"] = str(stingray.__version__)
+        info["uncertainties_version"] = str(uncertainties.__version__)
+        info["version"] = str(toa_extractor.__version__)
 
     return info

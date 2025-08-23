@@ -13,7 +13,6 @@ def create_fake_summary_file():
         "fit_residual": np.random.normal(0, 1e-6, size=24),
         "fit_residual_err": np.random.chisquare(2, size=24) / 1e6,
     }
-    print([len(d) for d in data.values()])
     df = Table(data)
     df = vstack([df, df])  # Duplicate the data to have more entries
     df["ephem"][24:] = "DE430"
@@ -45,7 +44,7 @@ def test_get_toa_stats():
     assert os.path.exists(outfname.replace(".csv", "_nustar_fpma.csv"))
     assert os.path.exists(outfname.replace(".csv", "_nicer_xti.csv"))
 
-    assert np.isnan(table[r"$\sigma$ (us)"][0])
+    assert table[r"$\sigma$ (us)"][0] == "--"
 
     # Check if the summary file was created and read correctly
     assert os.path.exists(outfname)

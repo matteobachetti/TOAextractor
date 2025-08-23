@@ -3,7 +3,9 @@ import numpy as np
 from scipy.stats import median_abs_deviation
 from astropy.table import Table, vstack
 from astropy.io import ascii
+import astropy.units as u
 from itertools import combinations
+from .utils import KNOWN_OFFSETS
 
 
 def get_toa_stats(
@@ -27,18 +29,30 @@ def get_toa_stats(
         subtable = subtable.group_by(["obsid", "rough_mjd", "ephem"]).groups.aggregate(np.mean)
         subsubtable_list = []
         ephem_cols = []
+
         for subsub in subtable.group_by(["obsid", "rough_mjd"]).groups:
             print(subsub["rough_mjd", "ephem", "obsid"])
             if len(subsub) > 1:
-                combs = list(combinations(set(subsub["ephem"]), 2))
+                available_ephems = np.unique(subsub["ephem"])
+                combs = list(combinations(available_ephems, 2))
                 diffs = {}
+                for eph in available_ephems:
+                    subsub_eph = subsub[subsub["ephem"] == eph]
+                    diffs[eph + "_fit_residual"] = subsub_eph["fit_residual"]
+                    diffs[eph + "_fit_residual_err"] = subsub_eph["fit_residual_err"]
+                    ephem_cols.extend([eph + "_fit_residual", eph + "_fit_residual_err"])
+
                 for comb in combs:
                     comb = sorted(comb)
-                    val = f"{comb[0]} - {comb[1]}"
+                    val = f"{comb[0]}_minus_{comb[1]}"
                     comb0 = subsub[subsub["ephem"] == comb[0]]
                     comb1 = subsub[subsub["ephem"] == comb[1]]
                     diffs[val] = comb0["fit_residual"] - comb1["fit_residual"]
-                    ephem_cols.append(val)
+                    diffs[val + "_err"] = np.sqrt(
+                        comb0["fit_residual_err"] ** 2 + comb1["fit_residual_err"] ** 2
+                    )
+
+                    ephem_cols.extend([val, val + "_err"])
 
             else:
                 diffs = {}
@@ -75,28 +89,44 @@ def get_toa_stats(
 
         mission = subsubtable_aggr["mission"][0]
         instrument = subsubtable_aggr["instrument"][0]
+        good = subsubtable_aggr["fit_residual_err"] < 0.015
+        subsubtable_aggr = subsubtable_aggr[good]
         n_meas = len(subsubtable_aggr)
+        offset = KNOWN_OFFSETS.get(
+            f"{mission.lower()}/{instrument.lower()}",
+            0 * u.us,
+        ).to_value(u.s)
+
+        print(f"{mission}/{instrument} offset (us): {1e6 * (offset):.2f}")
+        label = "*" if np.abs(offset) > 0 else ""
+
         if n_meas < 3:
-            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
+            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"]) + offset
             std_residual = np.nan
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
         elif n_meas > 20:
-            mean_residual = np.median(subsubtable_aggr["fit_residual"])
+            mean_residual = np.median(subsubtable_aggr["fit_residual"]) + offset
+
             std_residual = median_abs_deviation(subsubtable_aggr["fit_residual"], scale="normal")
             mean_stat_err = np.median(subsubtable_aggr["fit_residual_err"])
         else:
-            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"])
+            mean_residual = np.nanmean(subsubtable_aggr["fit_residual"]) + offset
+
             std_residual = np.nanstd(subsubtable_aggr["fit_residual"])
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
+
+        mean_residual_approx = float(f"{mean_residual * 1e6:.2e}")
+        std_residual_approx = float(f"{std_residual * 1e6:.1e}")
+        mean_stat_err_approx = float(f"{mean_stat_err * 1e6:.1e}")
 
         lines.append(
             [
                 mission.upper(),
                 instrument.upper(),
                 n_meas,
-                float(f"{mean_residual * 1e6:.1e}"),
-                float(f"{std_residual * 1e6:.1e}"),
-                float(f"{mean_stat_err * 1e6:.1e}"),
+                f"{mean_residual_approx:g}".replace("nan", "--") + label,
+                f"{std_residual_approx:g}".replace("nan", "--"),
+                f"{mean_stat_err_approx:g}".replace("nan", "--"),
             ]
         )
 
@@ -114,7 +144,7 @@ def get_toa_stats(
     )
     print("\nSummary of TOA statistics:")
     final_table.pprint()
-    final_table[names[:-1]].write(out_tex_fname, overwrite=True)
+    final_table[names].write(out_tex_fname, overwrite=True)
     final_table.write(out_fname, overwrite=True)
     return final_table
 

@@ -13,12 +13,12 @@ from bokeh.models import (
     PolyAnnotation,
     Whisker,
 )
-from bokeh.palettes import Category20b_20
+from bokeh.palettes import Turbo256
 from bokeh.plotting import figure, output_file, save, show
 from bokeh.transform import factor_cmap, factor_mark
 from uncertainties import ufloat
 
-from .utils import root_name
+from .utils import root_name, KNOWN_OFFSETS
 
 # from bokeh.layouts import column
 from .utils.crab import retrieve_cgro_ephemeris
@@ -38,6 +38,17 @@ def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual")
 
     res_label = res_label + f"_{time_units}"
 
+    df["mission+instr"] = [f"{m}/{ins.upper()}" for m, ins in zip(df["mission"], df["instrument"])]
+    # APPLY OFFSETS -------
+    _zero = 0 * u.Unit(time_units)
+    offsets = np.array(
+        [KNOWN_OFFSETS.get(m.lower(), _zero).to(time_units) for m in df["mission+instr"]],
+        dtype=np.longdouble,
+    )
+    df[res_label] += offsets
+    # ----------------------
+    print(df[res_label])
+
     res_str = [
         f"{ufloat(res, err):P} {time_units}"
         for res, err in zip(df[res_label], df[res_label + "_err"])
@@ -50,7 +61,6 @@ def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual")
 
     df["MJD_int"] = df["mjd"].astype(int)
 
-    df["mission+instr"] = [f"{m}/{ins.upper()}" for m, ins in zip(df["mission"], df["instrument"])]
     df["mission+ephem"] = [f"{m}-{e.upper()}" for m, e in zip(df["mission+instr"], df["ephem"])]
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
     mission_instr_combs = sorted(list(set(df["mission+instr"])))
@@ -120,7 +130,7 @@ def plot_frequency_history(
 
     color = factor_cmap(
         "mission+ephem",
-        palette=Category20b_20,
+        palette=Turbo256[:: int(len(Turbo256) / len(mission_ephem_combs))],
         factors=mission_ephem_combs,
         end=len(mission_ephem_combs),
     )
@@ -266,7 +276,7 @@ def plot_residuals(
 
     color = factor_cmap(
         "mission+ephem",
-        palette=Category20b_20,
+        palette=Turbo256[:: int(len(Turbo256) / len(mission_ephem_combs))],
         factors=mission_ephem_combs,
         end=len(mission_ephem_combs),
     )

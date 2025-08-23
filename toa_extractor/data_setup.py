@@ -5,15 +5,17 @@ import luigi
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from astropy import log
+from pint.logging import log
 from astropy import units as u
 from astropy.table import Table, vstack
+from astropy.coordinates import SkyCoord
+
 from hendrics.efsearch import (
     EFPeriodogram,
-    _analyze_qffa_results,
     pf_upper_limit,
-    search_with_qffa,
+    search_with_qffa_step,
 )
+from hendrics.efsearch import get_xy_boundaries_from_level
 from pulse_deadtime_fix.core import _create_weights
 from scipy.signal import savgol_filter
 from stingray import EventList
@@ -22,11 +24,11 @@ from stingray.io import FITSTimeseriesReader
 from stingray.pulse.pulsar import get_model
 
 from .utils import output_name
-from .utils.config import get_template, load_yaml_file
+from .utils.config import get_template, load_yaml_file, read_config
 
 # from .utils.fit_crab_profiles import normalize_phase_0d5
-from .utils.crab import get_crab_ephemeris
-from .utils.data_manipulation import get_events_from_fits, get_observing_info
+from .utils.crab import get_crab_ephemeris, get_best_cgro_row
+from .utils.data_manipulation import get_observing_info
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 
 
@@ -170,7 +172,6 @@ class GetPhaseogram(luigi.Task):
 
     def requires(self):
         yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
-        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
         return luigi.LocalTarget(output_name(self.fname, self.version, "_phaseograms.txt"))
@@ -179,6 +180,8 @@ class GetPhaseogram(luigi.Task):
         infofile = (
             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
+        config = read_config(self.config_file)
+        ntimes_for_approximation = config.get("ntimes_for_approximation", 1000)
         info = load_yaml_file(infofile)
 
         ephem = info["ephem"]
@@ -196,7 +199,7 @@ class GetPhaseogram(luigi.Task):
         # Read list of file ignoring blank lines
         parfiles = list(filter(None, open(parfile_list, "r").read().splitlines()))
 
-        log.info("Relevant parameter files: " + ",".join(parfiles))
+        log.debug("Relevant parameter files: " + ",".join(parfiles))
 
         model_epochs = np.asarray([get_model(p).PEPOCH.value for p in parfiles])
 
@@ -208,22 +211,38 @@ class GetPhaseogram(luigi.Task):
         fitsreader = FITSTimeseriesReader(
             self.fname, output_class=EventList, additional_columns=["PRIOR"]
         )
+
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
+
         current_gtis = fitsreader.gti
         if current_gtis is None:
             current_gtis = np.array([[fitsreader.time[0], fitsreader.time[-1]]])
             fitsreader.gti = current_gtis
+        current_gtis = np.sort(current_gtis, axis=0)
 
         obs_will_be_split = False
         split_at_edges = []
         if len(set(model_epochs_met)) > 1:
             split_at_edges = (model_epochs_met[1:] + model_epochs_met[:-1]) / 2
+
+        # Solve corner cases where the first GTI starts after the first split edge
+        while len(split_at_edges) > 0 and split_at_edges[0] < current_gtis[0, 0]:
+            split_at_edges = split_at_edges[1:]
+            model_epochs_met = model_epochs_met[1:]
+            parfiles = parfiles[1:]
+
+        while len(split_at_edges) > 0 and split_at_edges[-1] > current_gtis[-1, 1]:
+            split_at_edges = split_at_edges[:-1]
+            model_epochs_met = model_epochs_met[:-1]
+            parfiles = parfiles[:-1]
+
+        if len(split_at_edges) > 0:
             obs_will_be_split = True
 
         nphotons = fitsreader.nphot
-        log.info(f"Number of photons in the observation: {nphotons}.")
+        log.debug(f"Number of photons in the observation: {nphotons}.")
         # If nphotons is too high, further split the intervals
-        photon_max = 5_000_000  # soft upper limit
+        photon_max = config.get("photon_max", 50_000_000)  # soft upper limit
         max_exposure = np.inf
         if nphotons > photon_max * 1.5:
             max_exposure = fitsreader.exposure * photon_max / nphotons
@@ -248,14 +267,13 @@ class GetPhaseogram(luigi.Task):
             mean_met = (events.gti[0, 0] + events.gti[-1, 1]) / 2
             parfile = parfiles[np.argmin(np.abs(model_epochs_met - mean_met))]
 
-            log.info(f"Using {parfile} for {mjdstart} - {mjdstop}")
-
             correction_fun = get_phase_func_from_ephemeris_file(
                 mjdstart,
                 mjdstop,
                 parfile,
                 ephem=ephem,
                 return_sec_from_mjdstart=True,
+                ntimes=ntimes_for_approximation,
             )
 
             times_from_mjdstart = events.time - (mjdstart - events.mjdref) * 86400
@@ -288,7 +306,7 @@ class GetPhaseogram(luigi.Task):
             if events.instr is not None and events.instr.lower() in list(
                 _RATE_CORRECTION_FUNC.keys()
             ):
-                log.info(f"Instrument: {events.instr}")
+                log.debug(f"Instrument: {events.instr}")
                 # HRC
                 log.info(f"Using {events.instr} rate correction")
                 tot_prof = np.sum(result_table["profile"], axis=0)
@@ -312,7 +330,10 @@ class GetPhaseogram(luigi.Task):
             result_table.meta["mjdref"] = events.mjdref
             result_table.meta["mjdstart"] = mjdstart
             result_table.meta["mjdstop"] = mjdstop
+            result_table.meta["START"] = model.START.value
+            result_table.meta["FINISH"] = model.FINISH.value
             result_table.meta["mjd"] = (mjdstop + mjdstart) / 2
+            result_table.meta["model_conversion_rms"] = model.TRES.value
 
             new_file_name = output_name(
                 self.fname, self.version, f"_dynprof_{subprofile_count:000d}.hdf5"
@@ -333,19 +354,20 @@ class GetPulseFreq(luigi.Task):
 
     def requires(self):
         yield GetParfile(self.fname, self.config_file, self.version, self.worker_timeout)
-        yield GetTemplate(self.fname, self.config_file, self.version, self.worker_timeout)
 
     def output(self):
-        return luigi.LocalTarget(output_name(self.fname, self.version, "_best_cands.ecsv"))
+        return luigi.LocalTarget(output_name(self.fname, self.version, "_search.ecsv"))
 
     def run(self):
-        N = 6
-        infofile = (
-            GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
-        )
-        info = load_yaml_file(infofile)
-        events = get_events_from_fits(self.fname)
-        mjdstart, mjdstop = info["mjdstart"], info["mjdstop"]
+        N = 7
+
+        fitsreader = FITSTimeseriesReader(self.fname, output_class=EventList)
+        events = fitsreader[:]
+        if hasattr(events, "tdb"):
+            events.time = events.tdb
+
+        tstart, tstop = events.time[0], events.time[-1]
+        mjdstart, mjdstop = tstart / 86400 + events.mjdref, tstop / 86400 + events.mjdref
         parfile_list = (
             GetParfile(
                 self.fname,
@@ -371,7 +393,10 @@ class GetPulseFreq(luigi.Task):
 
         result_table = []
         for i, (mjdstart, mjdstop) in enumerate(zip(mjd_edges[:-1], mjd_edges[1:])):
-            if edge_idxs[i] >= events.time.size:
+            log.info(
+                f"Analyzing MJD interval {mjdstart} - {mjdstop} ({i + 1}/{len(mjd_edges) - 1})"
+            )
+            if edge_idxs[i] >= events.time.size or np.diff(edge_idxs[i : i + 2]) == 0:
                 warnings.warn("No events in this interval")
                 continue
 
@@ -379,7 +404,6 @@ class GetPulseFreq(luigi.Task):
 
             good = slice(edge_idxs[i], edge_idxs[i + 1])
             events_to_analyze = events.time[good]
-            length = events_to_analyze[-1] - events_to_analyze[0]
 
             ref_time = (events_to_analyze[-1] + events_to_analyze[0]) / 2
             ref_mjd = ref_time / 86400 + events.mjdref
@@ -390,45 +414,100 @@ class GetPulseFreq(luigi.Task):
                 + secs_from_pepoch * model.F1.value
                 + 0.5 * secs_from_pepoch**2 * model.F2.value
             )
-            f0_err = 2 / length
-            frequency_range = [central_freq - f0_err, central_freq + f0_err]
+            central_fdot = model.F1.value + secs_from_pepoch * model.F2.value
 
             log.info(
-                f"Searching for pulsations in interval {frequency_range[0]}-{frequency_range[1]}"
+                f"Searching for pulsations around {central_freq:.6e} Hz, {central_fdot:.2e} Hz/s"
             )
-            log.info(f"The central frequency is {central_freq}")
 
-            frequencies, stats, step, length = search_with_qffa(
-                events_to_analyze,
-                *frequency_range,
+            results = search_with_qffa_step(
+                np.double(events_to_analyze - ref_time),
+                mean_f=np.double(central_freq),
+                mean_fdot=np.double(central_fdot),
                 nbin=nbin,
+                nprof=nbin,
+                npfact=1,
                 n=N,
-                search_fdot=False,
-                oversample=nbin // 2,
-            )
-            efperiodogram = EFPeriodogram(
-                frequencies,
-                stats,
-                "Z2n",
-                nbin,
-                N,
-                mjdref=events.mjdref,
-                pepoch=ref_time,
+                search_fdot=True,
                 oversample=N * 8,
             )
+            frequencies, fdots, stats = results
+            step = np.median(np.diff(frequencies[:, 0]))
+            fdot_step = np.median(np.diff(fdots[:, 0]))
+
+            efperiodogram = EFPeriodogram(
+                freq=frequencies,
+                stat=stats,
+                kind="Z2n",
+                nbin=nbin,
+                N=N,
+                mjdref=events.mjdref,
+                pepoch=ref_mjd,
+                oversample=N * 8,
+                fdots=fdots,
+            )
             efperiodogram.upperlim = pf_upper_limit(np.max(stats), events.time.size, n=N)
+
             efperiodogram.ncounts = events.time.size
-            best_cand_table = _analyze_qffa_results(efperiodogram)
-            best_cand_table["f_err_n"] = [
-                -max(step / 2, err) for err in np.abs(best_cand_table["f_err_n"])
-            ]
-            best_cand_table["f_err_p"] = [
-                max(step / 2, err) for err in np.abs(best_cand_table["f_err_p"])
-            ]
+
+            max_idx = np.unravel_index(np.argmax(efperiodogram.stat), efperiodogram.stat.shape)
+            max_stat = efperiodogram.stat[max_idx]
+            f = efperiodogram.freq[max_idx]
+            fdot = efperiodogram.fdots[max_idx]
+
+            level = max_stat * 0.8
+            fmin, fmax, fdotmin, fdotmax = get_xy_boundaries_from_level(
+                efperiodogram.freq,
+                efperiodogram.fdots,
+                efperiodogram.stat.T,
+                level,
+                f,
+                fdot,
+            )
+            best_cand_table = {}
+            best_cand_table["f"] = f
+            best_cand_table["f_err_n"] = max(np.abs(fmin - f), step / 2)
+            best_cand_table["f_err_p"] = max(np.abs(fmax - f), step / 2)
+            best_cand_table["fdot"] = fdot
+            best_cand_table["fdot_err_n"] = max(np.abs(fdotmin - fdot), fdot_step / 2)
+            best_cand_table["fdot_err_p"] = max(np.abs(fdotmax - fdot), fdot_step / 2)
+            best_cand_table["power"] = max_stat
+            best_cand_table["mjd"] = ref_mjd
+            best_cand_table["label"] = f"Z^2_{N}"
+
+            plt.pcolormesh(
+                frequencies,
+                fdots,
+                stats.T,
+                shading="auto",
+                cmap="twilight",
+            )
+
+            plt.errorbar(
+                [best_cand_table["f"]],
+                [best_cand_table["fdot"]],
+                xerr=[
+                    [best_cand_table["f_err_n"]],
+                    [best_cand_table["f_err_p"]],
+                ],
+                yerr=[[best_cand_table["fdot_err_n"]], [best_cand_table["fdot_err_p"]]],
+                fmt="o",
+                zorder=10,
+            )
+            plt.colorbar()
+            plt.xlabel("Frequency (Hz)")
+            plt.ylabel("Frequency derivative (Hz/s)")
+            plt.savefig(
+                self.output().path.replace(".ecsv", f"_{i:03d}.png"),
+                bbox_inches="tight",
+                dpi=300,
+            )
+            plt.close(plt.gcf())
 
             best_cand_table["initial_freq_estimate"] = central_freq
-            log.info(best_cand_table[0])
-            result_table.append(best_cand_table[0])
+            best_cand_table["fname"] = self.fname
+            log.debug(best_cand_table)
+            result_table.append(best_cand_table)
         result_table = vstack(result_table)
         result_table.write(
             self.output().path,
@@ -454,6 +533,11 @@ class GetParfile(luigi.Task):
             GetInfo(self.fname, self.config_file, self.version, self.worker_timeout).output().path
         )
         info = load_yaml_file(infofile)
+        config_file = self.config_file
+        config = load_yaml_file(config_file)
+        if "format" not in config:
+            config["format"] = "cgro"
+
         ephem = info["ephem"]
         crab_names = ["crab", "b0531+21", "j0534+22"]
         found_crab = False
@@ -469,22 +553,26 @@ class GetParfile(luigi.Task):
         fname = self.output().path
         force_parameters = None
         if "ra_bary" in info and info["ra_bary"] is not None:
-            log.info("Trying to set coordinates to the values found in the FITS file header")
+            frame = info["frame"]
+
+            coords = SkyCoord(info["ra_bary"] * u.deg, info["dec_bary"] * u.deg, frame=frame)
+            log.info(f"{ephem}: using coordinates from the FITS file header: {coords}")
+
             force_parameters = {
                 "RAJ": info["ra_bary"] * u.deg,
                 "DECJ": info["dec_bary"] * u.deg,
             }
 
-        model1 = get_crab_ephemeris(
-            info["mjdstart"], ephem=ephem, force_parameters=force_parameters
-        )
-        model2 = get_crab_ephemeris(info["mjdstop"], ephem=ephem, force_parameters=force_parameters)
+        line1 = get_best_cgro_row(info["mjdstart"])
+        line2 = get_best_cgro_row(info["mjdstop"])
 
-        if model1.PEPOCH.value != model2.PEPOCH.value:
+        if line1["MJD1"] != line2["MJD1"]:
             warnings.warn(f"Different models for start and stop of {self.fname}")
             n_months = max(np.rint((info["mjdstop"] - info["mjdstart"]) / 30).astype(int), 2)
             models = [
-                get_crab_ephemeris(mjd, ephem=ephem, force_parameters=force_parameters)
+                get_crab_ephemeris(
+                    mjd, ephem=ephem, force_parameters=force_parameters, format=config["format"]
+                )
                 for mjd in np.linspace(info["mjdstart"], info["mjdstop"], n_months)
             ]
             fname_root = fname.replace(".txt", "")
@@ -501,7 +589,13 @@ class GetParfile(luigi.Task):
                     count += 1
         else:
             fname1 = fname.replace(".txt", ".par")
-            model1.write_parfile(fname1, include_info=False)
+            model = get_crab_ephemeris(
+                info["mjdstart"],
+                ephem=ephem,
+                force_parameters=force_parameters,
+                format=config["format"],
+            )
+            model.write_parfile(fname1, include_info=False)
             parfiles = [fname1]
 
         with open(fname, "w") as fobj:

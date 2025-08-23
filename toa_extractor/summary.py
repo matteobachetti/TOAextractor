@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from pint.logging import log
 
 from .utils.config import load_yaml_file
 
@@ -16,7 +17,10 @@ def main(args=None):
 
     result_table = None
     for fname in args.files:
-        print(f"Processing {fname}")
+        log.info(f"Processing {fname}")
+        if not os.path.exists(fname):
+            log.warning(f"File {fname} does not exist.")
+            continue
         info = load_yaml_file(fname)
         new_info = dict([(key, [val]) for key, val in info.items()])
         for arr in ["phase", "expo"]:
@@ -31,6 +35,7 @@ def main(args=None):
         else:
             result_table = pd.concat((result_table, newtab))
     result_table.sort_values(by="mission", inplace=True)
+
     result_table["path"] = [os.path.dirname(f) for f in result_table["fname"]]
     result_table["fname"] = [os.path.basename(f) for f in result_table["fname"]]
     result_table.to_csv(args.output)

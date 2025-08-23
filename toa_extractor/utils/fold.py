@@ -1,9 +1,11 @@
+import warnings
 import numpy as np
 from astropy.table import Table
 from numba import njit
-from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline
 from stingray.pulse.pulsar import _load_and_prepare_TOAs, get_model
 from stingray.utils import histogram2d
+from pint.logging import log
 
 ONE_SIXTH = 1 / 6
 
@@ -102,7 +104,7 @@ def get_phase_from_ephemeris_file(
     mjdstart,
     mjdstop,
     parfile,
-    ntimes=1000,
+    ntimes=101,
     ephem="DE430",
     return_sec_from_mjdstart=False,
 ):
@@ -130,8 +132,17 @@ def get_phase_from_ephemeris_file(
 
     parfile = parfile
     m = get_model(parfile)
+    log.info(f"Using {parfile} for {mjdstart} - {mjdstop}")
+    if mjdstart < m.START.value:
+        warnings.warn(
+            f"Start of the observation {mjdstart} is before the model start {m.START.value}"
+        )
+    if mjdstop > m.FINISH.value:
+        warnings.warn(f"End of the observation {mjdstop} is after the model end {m.FINISH.value}")
 
-    mjds = np.linspace(max(mjdstart, m.START.value), min(mjdstop, m.FINISH.value), ntimes)
+    mjds = np.linspace(mjdstart, mjdstop, ntimes)
+    log.info(f"Calculating reference phases for {ntimes} MJDs from {mjdstart} to {mjdstop}.")
+
     toalist = prepare_TOAs(mjds, ephem)
 
     phase_int, phase_frac = np.array(m.phase(toalist, abs_phase=True))
@@ -148,7 +159,7 @@ def get_phase_func_from_ephemeris_file(
     mjdstart,
     mjdstop,
     parfile,
-    ntimes=1000,
+    ntimes=101,
     ephem="DE430",
     return_sec_from_mjdstart=False,
 ):
@@ -181,4 +192,4 @@ def get_phase_func_from_ephemeris_file(
         return_sec_from_mjdstart=return_sec_from_mjdstart,
     )
 
-    return interp1d(times, phases, fill_value="extrapolate")
+    return CubicSpline(times, phases, extrapolate=True)

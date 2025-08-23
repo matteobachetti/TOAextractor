@@ -2,7 +2,7 @@ import copy
 
 import matplotlib.pyplot as plt
 import numpy as np
-from astropy import log
+from pint.logging import log
 from astropy.modeling.fitting import TRFLSQFitter
 from astropy.modeling.models import Const1D, custom_model
 from astropy.table import Table
@@ -266,7 +266,7 @@ def default_crab_model(init_pars=None, frozen=None):
     if frozen is not None:
         for key in frozen:
             if key in model_init.param_names:
-                print("Freezing", key)
+                log.debug(f"Freezing {key}")
                 getattr(model_init, key).fixed = True
     return model_init
 
@@ -372,12 +372,12 @@ def fit_crab_profile(phases, profile, fitter=None, init_pars=None, frozen=None):
     if init_pars is None:
         init_pars = get_initial_parameters(phases, profile)
     model_init = default_crab_model(init_pars=init_pars, frozen=frozen)
-    log.info("Initial parameters:")
+    log.debug("Initial parameters:")
     for par in model_init.param_names:
         fixed_str = "fixed" if getattr(model_init, par).fixed else "free"
         val = getattr(model_init, par).value
         bounds = getattr(model_init, par).bounds
-        log.info(f"    {par}: {val:.2e} {fixed_str} {bounds}")
+        log.debug(f"    {par}: {val:.2e} {fixed_str} {bounds}")
 
     weights = None
     if np.all(profile > 20):
@@ -391,23 +391,23 @@ def fit_crab_profile(phases, profile, fitter=None, init_pars=None, frozen=None):
         weights=weights,
         acc=0.001,
     )
-    log.info("Fit parameters:")
-    log.info(f"External normalization: {model_fit.amplitude_0.value:.2e}")
-    log.info(f"DC level: {model_fit.amplitude_1.value:.2e}")
-    log.info(f"    Main peak phase: {model_fit.x00_2.value:.2e}")
-    log.info(f"    Main peak sym. comp. amplitude: {model_fit.amplitude00_2.value:.2e}")
-    log.info(f"    Main peak sym. comp. FWHM: {model_fit.fwhm00_2.value:.2e}")
-    log.info(f"    Main peak comp. sep.: {model_fit.dx00_2.value:.2e}")
-    log.info(f"    Main peak asym comp. amplitude: {model_fit.amplitude10_2.value:.2e}")
-    log.info(f"    Main peak asym comp. FWHM (L): {model_fit.fwhm10_2.value:.2e}")
-    log.info(f"    Main peak asym comp. FWHM (R): {model_fit.fwhm20_2.value:.2e}")
-    log.info(f"    Peak separation: {model_fit.peak_separation_2.value:.2e}")
-    log.info(f"    Secondary peak sym comp. amplitude: {model_fit.amplitude01_2.value:.2e}")
-    log.info(f"    Secondary peak sym. comp. FWHM: {model_fit.fwhm01_2.value:.2e}")
-    log.info(f"    Secondary peak comp. sep.: {model_fit.dx01_2.value:.2e}")
-    log.info(f"    Secondary peak asym comp. amplitude: {model_fit.amplitude11_2.value:.2e}")
-    log.info(f"    Secondary peak asym comp. FWHM (L): {model_fit.fwhm11_2.value:.2e}")
-    log.info(f"    Secondary peak asym comp. FWHM (R): {model_fit.fwhm21_2.value:.2e}")
+    log.debug("Fit parameters:")
+    log.debug(f"External normalization: {model_fit.amplitude_0.value:.2e}")
+    log.debug(f"DC level: {model_fit.amplitude_1.value:.2e}")
+    log.debug(f"    Main peak phase: {model_fit.x00_2.value:.2e}")
+    log.debug(f"    Main peak sym. comp. amplitude: {model_fit.amplitude00_2.value:.2e}")
+    log.debug(f"    Main peak sym. comp. FWHM: {model_fit.fwhm00_2.value:.2e}")
+    log.debug(f"    Main peak comp. sep.: {model_fit.dx00_2.value:.2e}")
+    log.debug(f"    Main peak asym comp. amplitude: {model_fit.amplitude10_2.value:.2e}")
+    log.debug(f"    Main peak asym comp. FWHM (L): {model_fit.fwhm10_2.value:.2e}")
+    log.debug(f"    Main peak asym comp. FWHM (R): {model_fit.fwhm20_2.value:.2e}")
+    log.debug(f"    Peak separation: {model_fit.peak_separation_2.value:.2e}")
+    log.debug(f"    Secondary peak sym comp. amplitude: {model_fit.amplitude01_2.value:.2e}")
+    log.debug(f"    Secondary peak sym. comp. FWHM: {model_fit.fwhm01_2.value:.2e}")
+    log.debug(f"    Secondary peak comp. sep.: {model_fit.dx01_2.value:.2e}")
+    log.debug(f"    Secondary peak asym comp. amplitude: {model_fit.amplitude11_2.value:.2e}")
+    log.debug(f"    Secondary peak asym comp. FWHM (L): {model_fit.fwhm11_2.value:.2e}")
+    log.debug(f"    Secondary peak asym comp. FWHM (R): {model_fit.fwhm21_2.value:.2e}")
     return model_init, model_fit
 
 
