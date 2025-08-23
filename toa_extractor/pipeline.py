@@ -549,7 +549,14 @@ def main(args=None):
         dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
         fnames = []
         for d in dirs:
-            good_files = [f for f in args.files if f.startswith(d)]
+            good_files = [
+                f
+                for f in args.files
+                if (
+                    f.startswith(d)
+                    and not os.path.exists(TOAPipeline(f, config_file, args.version).output().path)
+                )
+            ]
             if len(good_files) > args.nmax:
                 good_files = random.sample(good_files, k=args.nmax)
             fnames += good_files
@@ -613,7 +620,14 @@ def main_freq(args=None):
         dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
         fnames = []
         for d in dirs:
-            good_files = [f for f in args.files if f.startswith(d)]
+            good_files = [
+                f
+                for f in args.files
+                if (
+                    f.startswith(d)
+                    and not os.path.exists(TOAPipeline(f, config_file, args.version).output().path)
+                )
+            ]
             if len(good_files) > args.nmax:
                 good_files = random.sample(good_files, k=args.nmax)
             fnames += good_files
