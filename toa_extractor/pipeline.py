@@ -511,6 +511,7 @@ def select_n_files_per_directory(files, nmax, config_file=None, version="none"):
     Examples
     --------
     >>> input_files = ["./dir1/file1", "./dir2/file3"]
+    >>> select_n_files_per_directory(input_files, 1)
     ['dir1/file1', 'dir2/file3']
     >>> input_files = ["./dir1/file1", "./dir1/file2", "./dir2/file3", "./dir2/file4"]
     >>> files = select_n_files_per_directory(input_files, 1)
@@ -520,19 +521,17 @@ def select_n_files_per_directory(files, nmax, config_file=None, version="none"):
     """
     log.info(f"Analyzing only {nmax} files per directory, chosen randomly")
     files = [os.path.relpath(f) for f in files]
-    dirs = list(set([os.path.split(fname)[0] for fname in files]))
+    dirs = sorted(list(set([os.path.split(fname)[0] for fname in files])))
     fnames = []
     for d in dirs:
-        print(d)
         log.debug(f"Selecting files from directory {d}")
         files_in_dir = [f for f in files if f.startswith(d)]
-        print(files_in_dir)
 
         if len(files_in_dir) <= nmax:
             good_files = files_in_dir
         else:
             good_files = []
-            while len(good_files) <= nmax:
+            while len(good_files) < nmax:
                 if len(files_in_dir) == 0:
                     break
                 f = random.choice(files_in_dir)
