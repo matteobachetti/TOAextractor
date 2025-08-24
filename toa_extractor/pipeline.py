@@ -505,6 +505,49 @@ def get_outputs(task):
     return outputs
 
 
+def select_n_files_per_directory(files, nmax, config_file=None, version="none"):
+    """Select up to nmax files per directory, chosen randomly.
+
+    Examples
+    --------
+    >>> input_files = ["./dir1/file1", "./dir2/file3"]
+    ['dir1/file1', 'dir2/file3']
+    >>> input_files = ["./dir1/file1", "./dir1/file2", "./dir2/file3", "./dir2/file4"]
+    >>> files = select_n_files_per_directory(input_files, 1)
+    >>> # Must be two files, from two different directories
+    >>> assert len(files) == 2
+    >>> assert len(set(os.path.split(f)[0] for f in files)) == 2
+    """
+    log.info(f"Analyzing only {nmax} files per directory, chosen randomly")
+    files = [os.path.relpath(f) for f in files]
+    dirs = list(set([os.path.split(fname)[0] for fname in files]))
+    fnames = []
+    for d in dirs:
+        print(d)
+        log.debug(f"Selecting files from directory {d}")
+        files_in_dir = [f for f in files if f.startswith(d)]
+        print(files_in_dir)
+
+        if len(files_in_dir) <= nmax:
+            good_files = files_in_dir
+        else:
+            good_files = []
+            while len(good_files) <= nmax:
+                if len(files_in_dir) == 0:
+                    break
+                f = random.choice(files_in_dir)
+                res = TOAPipeline(f, config_file, version).output().path
+                exists = os.path.exists(res)
+                if not exists and not f in good_files:
+                    log.debug(f"Adding {f}")
+                    good_files.append(f)
+                else:
+                    log.debug(f"File {f} already processed")
+                files_in_dir.remove(f)
+        fnames.extend(good_files)
+    return fnames
+
+
 def main(args=None):
     import argparse
 
@@ -544,31 +587,9 @@ def main(args=None):
 
     config = read_config(config_file)
     fnames = args.files
-    if args.nmax is not None:
-        log.info(f"Analyzing only {args.nmax} files per directory, chosen randomly")
-        dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
-        fnames = []
-        for d in dirs:
-            files_in_dir = [f for f in args.files if f.startswith(d)]
-            good_files = []
 
-            if len(files_in_dir) <= args.nmax:
-                good_files = files_in_dir
-            else:
-                count_processed = 0
-                while len(good_files) < max(args.nmax, len(files_in_dir)):
-                    if len(files_in_dir) == 0:
-                        break
-                    f = random.choice(files_in_dir)
-                    res = TOAPipeline(f, config_file, args.version).output().path
-                    exists = os.path.exists(res)
-                    if not exists and not f in good_files:
-                        good_files.append(f)
-                        files_in_dir.remove(f)
-                    else:
-                        log.info(f"File {f} already processed")
-                        count_processed += 1
-                        files_in_dir.remove(f)
+    if args.nmax is not None:
+        fnames = select_n_files_per_directory(fnames, args.nmax, config_file, args.version)
 
     _ = luigi.build(
         [
@@ -625,32 +646,7 @@ def main_freq(args=None):
 
     fnames = args.files
     if args.nmax is not None:
-        log.info(f"Analyzing only {args.nmax} files per directory, chosen randomly")
-        dirs = list(set([os.path.split(fname)[0] for fname in args.files]))
-        fnames = []
-        for d in dirs:
-            files_in_dir = [f for f in args.files if f.startswith(d)]
-            good_files = []
-
-            if len(files_in_dir) <= args.nmax:
-                good_files = files_in_dir
-            else:
-                count_processed = 0
-                while len(good_files) < max(args.nmax, len(files_in_dir)):
-                    if len(files_in_dir) == 0:
-                        break
-                    f = random.choice(files_in_dir)
-                    res = TOAPipeline(f, config_file, args.version).output().path
-                    exists = os.path.exists(res)
-                    if not exists and not f in good_files:
-                        good_files.append(f)
-                        files_in_dir.remove(f)
-                    else:
-                        log.info(f"File {f} already processed")
-                        count_processed += 1
-                        files_in_dir.remove(f)
-
-            fnames += good_files
+        fnames = select_n_files_per_directory(fnames, args.nmax, config_file, args.version)
 
     _ = luigi.build(
         [GetPulseFreq(fname, config_file, args.version) for fname in fnames],
