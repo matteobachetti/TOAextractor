@@ -310,10 +310,7 @@ def plot_residuals(
         "diamond_dot",
         "dot",
     ]
-    if len(mission_ephem_combs) < len(MARKERS):
-        markers = factor_mark("mission+ephem", MARKERS, factors=mission_ephem_combs)
-    else:
-        markers = factor_mark("mission", MARKERS, factors=all_missions)
+    markers = factor_mark("mission", MARKERS, factors=all_missions)
     for m in mission_ephem_combs:
         group = GroupFilter(column_name="mission+ephem", group=m)
         # source = df
