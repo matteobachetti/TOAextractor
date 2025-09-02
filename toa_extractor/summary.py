@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 from pint.logging import log
 
 from .utils.config import load_yaml_file
@@ -22,6 +23,9 @@ def main(args=None):
             log.warning(f"File {fname} does not exist.")
             continue
         info = load_yaml_file(fname)
+        if info is None:
+            log.warning(f"File {fname} could not be read.")
+            continue
         new_info = dict([(key, [val]) for key, val in info.items()])
         for arr in ["phase", "expo"]:
             if arr in new_info:
@@ -38,4 +42,8 @@ def main(args=None):
 
     result_table["path"] = [os.path.dirname(f) for f in result_table["fname"]]
     result_table["fname"] = [os.path.basename(f) for f in result_table["fname"]]
+    ampl_to_noise = result_table["best_fit_amplitude_1"] / max(
+        1, np.sqrt(result_table["best_fit_amplitude_0"])
+    )
+    result_table["amplitude_to_noise"] = ampl_to_noise
     result_table.to_csv(args.output)
