@@ -231,6 +231,19 @@ class TOAPipeline(luigi.Task):
 
         profile_fit_table = Table.read(profile_fit_file)
         # best_freq_table = Table.read(best_freq_file)
+        meta = profile_fit_table.meta
+
+        for key in "phase", "expo":
+            meta.pop(key, None)
+        for model_results_str in "best_fit", "model_init":
+            data = meta.pop(model_results_str, None)
+            if data is not None:
+                residual_dict.update(
+                    dict([(model_results_str + "_" + k, v) for k, v in data.items()])
+                )
+
+        residual_dict.update(meta)
+
         residual_dict["phase_max"] = profile_fit_table.meta["phase_max"]
         residual_dict["phase_max_err"] = profile_fit_table.meta["phase_max_err"]
         residual_dict["fit_residual"] = (
@@ -257,6 +270,14 @@ class TOAPipeline(luigi.Task):
                 local_image_file = search_substring_in_list(label + ".jpg", image_files)[0]
                 local_residual_dict["img"] = encode_image_file(local_image_file)
                 local_outfile = self.output().path.replace(".txt", f"{label}.yaml")
+                for key in "phase", "expo":
+                    meta.pop(key, None)
+                for model_results_str in "best_fit", "model_init":
+                    data = meta.pop(model_results_str, None)
+                    if data is not None:
+                        local_residual_dict.update(
+                            dict([(model_results_str + "_" + k, v) for k, v in data.items()])
+                        )
 
                 with open(local_outfile, "w") as f:
                     yaml.dump(local_residual_dict, f)
