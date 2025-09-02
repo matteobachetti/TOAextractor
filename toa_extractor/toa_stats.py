@@ -1,4 +1,5 @@
 import os
+import re
 import numpy as np
 from scipy.stats import median_abs_deviation
 from astropy.table import Table, vstack
@@ -6,6 +7,103 @@ from astropy.io import ascii
 import astropy.units as u
 from itertools import combinations
 from .utils import KNOWN_OFFSETS
+
+
+def write_pairwise_diffs(summary_fname, out_dir=None, max_dt_days=1.0):
+    """
+    Parse summary CSV and for each reference (mission,instrument) produce CSV files
+    diff_REFM_REFI__OTHERM_OTHERI.csv listing all measurements from one specific
+    other mission/instrument taken within max_dt_days of the reference mjd.
+
+    Each output row contains:
+      ref_mjd, other_mjd, diff_fit_residual (ref - other),
+      diff_fit_residual_err (sqrt(err_ref^2 + err_other^2)),
+      ref_mission, ref_instrument, other_mission, other_instrument
+
+    Returns list of written filenames.
+    """
+
+    if out_dir is None:
+        out_dir = os.getcwd()
+    if not os.path.exists(summary_fname):
+        raise FileNotFoundError(f"Summary file {summary_fname} does not exist.")
+
+    table = Table.read(summary_fname)
+
+    required = {"mjd", "mission", "instrument", "fit_residual", "fit_residual_err"}
+    if not required.issubset(set(table.colnames)):
+        missing = required - set(table.colnames)
+        raise ValueError(f"Missing required columns in summary file: {missing}")
+
+    mjds = np.array(table["mjd"], dtype=float)
+    missions = np.array(table["mission"], dtype=str)
+    instruments = np.array(table["instrument"], dtype=str)
+    fit = np.array(table["fit_residual"], dtype=float)
+    ferr = np.array(table["fit_residual_err"], dtype=float)
+
+    n = len(table)
+    # now key by ((ref_mission, ref_instrument), (other_mission, other_instrument))
+    outputs = {}
+    for i in range(n):
+        if not np.isfinite(mjds[i]) or not np.isfinite(fit[i]) or not np.isfinite(ferr[i]):
+            continue
+        ref_mjd = mjds[i]
+        # find other rows within time window (including same-day) but exclude same index
+        close = np.abs(mjds - ref_mjd) <= float(max_dt_days)
+        close[i] = False
+        # exclude identical mission+instrument (we want different instrument/mission)
+        same_pair = (missions == missions[i]) & (instruments == instruments[i])
+        close = close & (~same_pair)
+        idxs = np.where(close)[0]
+        if idxs.size == 0:
+            continue
+
+        for j in idxs:
+            if not np.isfinite(fit[j]) or not np.isfinite(ferr[j]) or not np.isfinite(mjds[j]):
+                continue
+            diff = fit[i] - fit[j]
+            diff_err = np.sqrt(ferr[i] ** 2 + ferr[j] ** 2)
+            key = ((missions[i], instruments[i]), (missions[j], instruments[j]))
+            outputs.setdefault(key, [])
+            outputs[key].append(
+                (
+                    float(ref_mjd),
+                    float(mjds[j]),
+                    float(diff),
+                    float(diff_err),
+                    missions[i],
+                    instruments[i],
+                    missions[j],
+                    instruments[j],
+                )
+            )
+
+    written_files = []
+    for ((ref_mission, ref_instrument), (oth_mission, oth_instrument)), rows in outputs.items():
+        if len(rows) == 0:
+            continue
+        names = [
+            "ref_mjd",
+            "other_mjd",
+            "diff_fit_residual",
+            "diff_fit_residual_err",
+            "ref_mission",
+            "ref_instrument",
+            "other_mission",
+            "other_instrument",
+        ]
+        out_table = Table(rows=rows, names=names)
+        safe_ref_m = re.sub(r"\W+", "_", ref_mission.upper())
+        safe_ref_i = re.sub(r"\W+", "_", ref_instrument.upper())
+        safe_oth_m = re.sub(r"\W+", "_", oth_mission.upper())
+        safe_oth_i = re.sub(r"\W+", "_", oth_instrument.upper())
+        fname = os.path.join(
+            out_dir, f"diff_{safe_ref_m}_{safe_ref_i}__{safe_oth_m}_{safe_oth_i}.csv"
+        )
+        out_table.write(fname, overwrite=True, format="csv")
+        written_files.append(fname)
+
+    return written_files
 
 
 def get_toa_stats(
@@ -164,4 +262,8 @@ def main(args=None):
         args.summary_fname,
         out_fname=args.output,
         out_tex_fname=args.output.replace("csv", "tex"),
+    )
+    write_pairwise_diffs(
+        args.summary_fname,
+        out_dir=os.path.dirname(args.output),
     )
