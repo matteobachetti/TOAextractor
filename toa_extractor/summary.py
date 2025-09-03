@@ -42,8 +42,12 @@ def main(args=None):
 
     result_table["path"] = [os.path.dirname(f) for f in result_table["fname"]]
     result_table["fname"] = [os.path.basename(f) for f in result_table["fname"]]
-    ampl_to_noise = result_table["best_fit_amplitude_1"] / max(
-        1, np.sqrt(result_table["best_fit_amplitude_0"])
-    )
+    if "best_fit_amplitude_0" not in result_table or "best_fit_amplitude_1" not in result_table:
+        log.warning("Missing amplitude columns.")
+        ampl_to_noise = np.nan
+    else:
+        ampl_to_noise = result_table["best_fit_amplitude_1"] / max(
+            1, np.sqrt(result_table["best_fit_amplitude_0"])
+        )
     result_table["amplitude_to_noise"] = ampl_to_noise
     result_table.to_csv(args.output)
