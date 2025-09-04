@@ -415,6 +415,8 @@ def get_observing_info(evfile, hduname=1):
             log.info("Barycentric coordinates found in RA_OBJ and DEC_OBJ")
             info["ra_bary"] = header["RA_OBJ"]
             info["dec_bary"] = header["DEC_OBJ"]
+        else:
+            log.warning("Barycentric coordinates are not explicit in the header.")
         info["mjdstart"] = float_if_not_none(info["tstart"] / 86400 + mjdref_highprec)
         info["mjdstop"] = float_if_not_none(info["tstop"] / 86400 + mjdref_highprec)
         MJD = float(info["mjdstart"] + info["mjdstop"]) / 2

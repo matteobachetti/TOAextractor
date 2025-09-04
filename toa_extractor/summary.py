@@ -46,8 +46,10 @@ def main(args=None):
         log.warning("Missing amplitude columns.")
         ampl_to_noise = np.nan
     else:
-        ampl_to_noise = result_table["best_fit_amplitude_1"] / max(
-            1, np.sqrt(result_table["best_fit_amplitude_0"])
-        )
+        base = np.array(result_table["best_fit_amplitude_0"])
+        peak = np.array(result_table["best_fit_amplitude_1"])
+        scatter = np.sqrt(base + 0.75) + 1  # From Israel 1968, SRL internal report
+
+        ampl_to_noise = peak / scatter
     result_table["amplitude_to_noise"] = ampl_to_noise
     result_table.to_csv(args.output)
