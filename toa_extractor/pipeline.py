@@ -558,7 +558,7 @@ def select_n_files_per_directory(files, nmax, config_file=None, version="none"):
                 f = random.choice(files_in_dir)
                 res = TOAPipeline(f, config_file, version).output().path
                 exists = os.path.exists(res)
-                if not exists and not f in good_files:
+                if not exists and f not in good_files:
                     log.debug(f"Adding {f}")
                     good_files.append(f)
                 else:
