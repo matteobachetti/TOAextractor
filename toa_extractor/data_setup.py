@@ -5,10 +5,18 @@ import luigi
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from pint.logging import log
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import savgol_filter
 from astropy import units as u
 from astropy.table import Table, vstack
 from astropy.coordinates import SkyCoord
+
+from pint.logging import log
+
+from stingray import EventList
+from stingray.gti import cross_two_gtis, split_gtis_by_exposure
+from stingray.io import FITSTimeseriesReader
+from stingray.pulse.pulsar import get_model
 
 from hendrics.efsearch import (
     EFPeriodogram,
@@ -17,24 +25,55 @@ from hendrics.efsearch import (
 )
 from hendrics.efsearch import get_xy_boundaries_from_level
 from pulse_deadtime_fix.core import _create_weights
-from scipy.signal import savgol_filter
-from stingray import EventList
-from stingray.gti import cross_two_gtis, split_gtis_by_exposure
-from stingray.io import FITSTimeseriesReader
-from stingray.pulse.pulsar import get_model
 
 from .utils import output_name
 from .utils.config import get_template, load_yaml_file, read_config
-
-# from .utils.fit_crab_profiles import normalize_phase_0d5
 from .utils.crab import get_crab_ephemeris, get_best_cgro_row
 from .utils.data_manipulation import get_observing_info
 from .utils.fold import calculate_dyn_profile, get_phase_func_from_ephemeris_file
 
 
 def hrc_true_rate(rate: float):
+    """
+    HRC true rate correction from observed rate.
+
+    Uses Equation 3 from the memo
+    `HRC CRL memo <https://cxc.harvard.edu/cal/Hrc/Documents/hrc_crl.ps>`_.
+
+    Parameters
+    ----------
+    rate : float or numpy.ndarray
+        Observed rate in counts per second. May be a scalar or an array; when an array
+        is provided, the function returns an array of the same shape with per-element
+        corrections applied.
+
+    Returns
+    -------
+    corr : float or numpy.ndarray
+        Corrected (true) rate in counts per second. For inputs below 12 c/s the input
+        rate is returned unchanged. For inputs above the practical correction range,
+        behavior is described below.
+
+    Notes
+    -----
+    - Valid correction range: 12 -- 24 c/s (uses Equation 3 from the referenced memo).
+    - For rate < 12 c/s, no correction is applied (returns the input rate).
+    - For rate > 24 c/s, a warning is issued indicating the rate is too high for
+      a reliable HRC correction.
+    - A hard upper limit is enforced at 2058.4 / 75.6 (~27.3 c/s); values above this
+      are clipped to that limit before applying the formula to avoid invalid results.
+
+    Raises
+    ------
+    UserWarning
+        If an input scalar rate (or any element of an input array) exceeds 24 c/s, a
+        UserWarning is emitted to indicate the correction may be unreliable.
+
+    """
+
     if isinstance(rate, np.ndarray):
         return np.asarray([hrc_true_rate(r) for r in rate])
+
     if rate < 12:
         return rate
     if rate > 24:
@@ -313,13 +352,12 @@ class GetPhaseogram(luigi.Task):
                 avg_rate = tot_prof * nbin / events.exposure
                 fold_correction_fun = _RATE_CORRECTION_FUNC[events.instr.lower()]
                 # avg_rate = np.mean(rate, axis=0)
-                from scipy.ndimage import gaussian_filter1d
 
                 avg_rate = gaussian_filter1d(avg_rate.astype(float), 5, mode="wrap")
-                if np.any(avg_rate <= 0):
-                    warnings.warn("Rate is zero or negative")
-                    continue
-                expo = avg_rate / fold_correction_fun(avg_rate)
+                expo = np.ones_like(avg_rate)
+                corr = fold_correction_fun(avg_rate)
+                change = corr != avg_rate
+                expo[change] = avg_rate[change] / fold_correction_fun(avg_rate[change])
 
                 result_table.meta["expo"] = expo
 
@@ -340,6 +378,9 @@ class GetPhaseogram(luigi.Task):
             )
             result_table.write(new_file_name, overwrite=True, serialize_meta=True)
             output_files.append(new_file_name)
+
+        if not output_files:
+            raise RuntimeError("No phaseogram could be created.")
 
         with open(self.output().path, "w") as fobj:
             for fname in output_files:
