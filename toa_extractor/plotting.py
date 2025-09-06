@@ -77,6 +77,31 @@ def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual")
         mission_ephem_combs = mission_instr_combs
         df["mission+ephem"] = df["mission+instr"]
 
+    # Handle both old (img) and new (img_path) image columns
+    csv_dir = os.path.dirname(os.path.abspath(fname))
+
+    if "img_path" in df.columns:
+        # New system: file-based images
+        def process_image_path(img_path):
+            if pd.isna(img_path) or img_path == "":
+                return ""
+            # Check if image file exists
+            full_path = os.path.join(csv_dir, img_path)
+            if os.path.exists(full_path):
+                return img_path
+            else:
+                return ""  # Empty string signals missing image
+
+        df["img_src"] = df["img_path"].apply(process_image_path)
+    elif "img" in df.columns:
+        # Old system: base64 images
+        df["img_src"] = df["img"].apply(
+            lambda x: f"data:image/jpg;base64,{x}" if pd.notna(x) and x != "" else ""
+        )
+    else:
+        # No images available
+        df["img_src"] = ""
+
     return ColumnDataSource(df)
 
 
@@ -90,14 +115,25 @@ def plot_frequency_history(
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
     all_missions = sorted(list(set(df["mission"])))
 
-    TOOLTIPS = """
+    style = (
+        "float: left; margin: 0px 15px 15px 0px; width: 248px; height: 150px; "
+        "background-color: #f0f0f0; display: none; align-items: center; "
+        "justify-content: center; border: 2px solid #ccc;"
+    )
+    TOOLTIPS = f"""
     <div>
         <div>
             <img
-                src="data:image/jpg;base64,@img" alt="Bla" width="248"
+                src="@img_src" alt="Diagnostic plot not available" width="248"
                 style="float: left; margin: 0px 15px 15px 0px;"
                 border="2"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
             ></img>
+            <div style={style}>
+                <span style="color: #666; text-align: center;">Diagnostic plot<br/>
+                not available
+                </span>
+            </div>
         </div>
         <div>
             <span style="font-size: 17px; font-weight: bold;">@mission</span>
@@ -230,14 +266,25 @@ def plot_residuals(
     mission_ephem_combs = sorted(list(set(df["mission+ephem"])))
     all_missions = sorted(list(set(df["mission"])))
 
-    TOOLTIPS = """
+    style = (
+        "float: left; margin: 0px 15px 15px 0px; width: 248px; height: 150px; "
+        "background-color: #f0f0f0; display: none; align-items: center; "
+        " justify-content: center; border: 2px solid #ccc;"
+    )
+    TOOLTIPS = f"""
     <div>
         <div>
             <img
-                src="data:image/jpg;base64,@img" alt="Bla" width="248"
+                src="@img_src" alt="Diagnostic plot not available" width="248"
                 style="float: left; margin: 0px 15px 15px 0px;"
                 border="2"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
             ></img>
+            <div style={style}">
+                <span style="color: #666; text-align: center;">
+                Diagnostic plot<br/>not available
+                </span>
+            </div>
         </div>
         <div>
             <span style="font-size: 17px; font-weight: bold;">@mission</span>

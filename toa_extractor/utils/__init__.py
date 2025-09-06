@@ -116,6 +116,57 @@ def encode_image_file(image_file):
     return base64_encoded_result_str
 
 
+def process_and_copy_image(source_image_path, target_image_path, image_config):
+    """
+    Process and copy image according to configuration.
+
+    Parameters
+    ----------
+    source_image_path : str
+        Path to source image file
+    target_image_path : str
+        Path where processed image should be saved
+    image_config : dict
+        Image configuration with keys: max_width, quality, format
+
+    Returns
+    -------
+    str
+        Path to the processed image file
+    """
+    # Ensure target directory exists
+    target_dir = os.path.dirname(target_image_path)
+    os.makedirs(target_dir, exist_ok=True)
+
+    try:
+        img = Image.open(source_image_path)
+        width, height = img.size
+
+        # Resize if necessary
+        max_width = image_config.get("max_width", 512)
+        if width > max_width:
+            h_w_ratio = height / width
+            new_size = (max_width, int(max_width * h_w_ratio))
+            img.thumbnail(new_size, Image.LANCZOS)
+
+        # Save with specified quality and format
+        save_kwargs = {}
+        img_format = image_config.get("format", "JPEG")
+        if img_format.upper() == "JPEG":
+            save_kwargs["quality"] = image_config.get("quality", 85)
+            save_kwargs["optimize"] = True
+
+        img.save(target_image_path, format=img_format, **save_kwargs)
+        return target_image_path
+
+    except Exception:
+        # If processing fails, just copy the original
+        import shutil
+
+        shutil.copy2(source_image_path, target_image_path)
+        return target_image_path
+
+
 def search_substring_in_list(substring, list_of_strings):
     """
     Search for a substring in a list of strings.
