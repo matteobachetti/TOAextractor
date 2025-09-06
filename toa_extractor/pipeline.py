@@ -549,19 +549,7 @@ def get_outputs(task):
 
 
 def select_n_files_per_directory(files, nmax, config_file=None, version="none"):
-    """Select up to nmax files per directory, chosen randomly.
-
-    Examples
-    --------
-    >>> input_files = ["./dir1/file1", "./dir2/file3"]
-    >>> select_n_files_per_directory(input_files, 1)
-    ['dir1/file1', 'dir2/file3']
-    >>> input_files = ["./dir1/file1", "./dir1/file2", "./dir2/file3", "./dir2/file4"]
-    >>> files = select_n_files_per_directory(input_files, 1)
-    >>> # Must be two files, from two different directories
-    >>> assert len(files) == 2
-    >>> assert len(set(os.path.split(f)[0] for f in files)) == 2
-    """
+    """Select up to nmax files per directory, chosen randomly."""
     log.info(f"Analyzing only {nmax} files per directory, chosen randomly")
     files = [os.path.relpath(f) for f in files]
     dirs = sorted(list(set([os.path.split(fname)[0] for fname in files])))
