@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>TOA Extractor &#8212; toa_extractor v0.5.2.dev7+gcb2a7d0a4</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/bootstrap-astropy.css?v=177ce38d" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="_static/plot_directive.css" />
+    
+    <script src="_static/jquery.js?v=5d32c60e"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+    <script src="_static/documentation_options.js?v=8923b257"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script type="text/javascript" src="_static/sidebar.js"></script>
+    <script type="text/javascript" src="_static/copybutton.js"></script>
+    <link rel="icon" href="_static/astropy_logo.ico"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="toa_extractor Documentation" href="toa_extractor/index.html" />
+    <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro:200,600' rel='stylesheet' type='text/css'/>
+
+  </head><body>
+<div class="topbar">
+  <a class="brand" title="Documentation Home" href="#"><span id="logotext1">toa_extractor</span><span id="logotext2"></span><span id="logotext3">:docs</span></a>
+  <ul>
+    
+    <li><a class="homelink" title="Astropy Homepage" href="http://www.astropy.org"></a></li>
+    <li><a title="General Index" href="genindex.html">Index</a></li>
+    <li><a title="Module Index" href="py-modindex.html">Modules</a></li>
+    <li>
+      
+      
+<form action="search.html" method="get">
+  <input type="text" name="q" placeholder="Search" />
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+      
+    </li>
+  </ul>
+</div>
+
+<div class="related">
+    <h3>Navigation</h3>
+    <ul>
+      <li class="right">
+	<a href="toa_extractor/index.html" title="toa_extractor Documentation">
+	  next &raquo;
+	</a>
+      </li>
+      <li>
+	<a href="#">toa_extractor v0.5.2.dev7+gcb2a7d0a4</a>
+	 &#187;
+      </li>
+      
+       
+    </ul>
+</div>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="toa-extractor">
+<h1>TOA Extractor<a class="headerlink" href="#toa-extractor" title="Link to this heading">¶</a></h1>
+<p>This software was produced in the framework of the International Astronomical Consortium for High Energy Calibration (IACHEC).
+By observing the same pulsar(s) with multiple instruments, we can measure their timing performance, and in particular their absolute alignment to Universal Time (UT) and their stability over time.
+TOA Extractor allows to perform a standard timing analysis on X-ray data, creating a rich database of X-ray Times of Arrival (TOAs) that can be used at this scope. Our current calibrator source is the Crab, for principally two reasons:</p>
+<ul class="simple">
+<li><p>it is monitored by all missions regularly for spectral calibration;</p></li>
+<li><p>the Jodrell Bank radio telescope regularly publishes a monthly ephemeris of the Crab pulsar since 1987 [[CHECK]]</p></li>
+</ul>
+<p>There are a few drawbacks of this approach:</p>
+<ol class="arabic simple">
+<li><p>The monthly ephemeris, for consistency, uses a timing solution obtained by using a constant source position and the same JPL ephemeris, which is now quite outdated (DE 200). X-ray astronomers today use more modern ephemerides, and it is not straightforward to use the monthly ephemeris to fold the pulsar.</p></li>
+<li><p>The Crab pulsar is very bright, which is advantageous to obtain TOAs quickly, but it severely impacts the analysis with some detectors due to pile up, dead time and other instrumental effects.</p></li>
+<li><p>This pulsar is slow and unstable compared to others, with frequent “glitches” (sudden changes of the rotational speed) and changes in the delay the radio signal accumulates due to a varying amount of neutral gas traversed by the radio waves.</p></li>
+</ol>
+<p>TOA Extractor solves the first bullet point and, in part, the second. To accommodate different JPL ephemerides and source position, we refit the JB ephemeris to the new parameters using simulated data (see below). The code also contains methods to correct the pulse profile from dead time (using the information on prior livetime shared by some missions) and pile-up (at the moment, it is only applied to Chandra-HRC data).
+Future work will address the third point by adding other pulsars to the calibrators.</p>
+<section id="how-to-use-the-code">
+<h2>How to use the code<a class="headerlink" href="#how-to-use-the-code" title="Link to this heading">¶</a></h2>
+<p>The starting point are photon event lists that have been preprocessed by the instrument teams and “barycentered” – had their time measurements referred to the UT at the Solar System Barycenter (SSB) and not to the local time at the satellite.
+One can “fold” an observation to obtain the average pulse profile, fit the pulse profile with a combination of symmetric and asymmetric lines, and calculate the TOA (the arrival time of the peak of the pulsation) and the difference compared to the reference model by simply executing the command:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>toaextract<span class="w"> </span>path_to_file_name.fits
+</pre></div>
+</div>
+<p>This will go through different steps, each of whom will produce one or more files with diagnostic data and plots like the one below. Long observations, or observations containing a large number of photons, will be split in shorter segments producing multiple diagnostic plots and TOAs. If everything goes smoothly, the results will be written in files ending by <code class="docutils literal notranslate"><span class="pre">*results_*.yaml</span></code>.</p>
+<a class="reference internal image-reference" href="_images/profile_fit.jpg"><img alt="Depiction of the model used to fit the pulse profile" class="align-center" src="_images/profile_fit.jpg" style="width: 100%;" />
+</a>
+<p>Results from all processed files can be gathered by executing:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>toasummary<span class="w"> </span>*results*.yaml
+</pre></div>
+</div>
+<p>This will produce an CSV table (<code class="docutils literal notranslate"><span class="pre">summary_*.csv</span></code>) with all the results. Finally, one can execute:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>toaplot<span class="w"> </span>summary.csv
+</pre></div>
+</div>
+<p>which will produce an html file with an interactive plot of the results. The plot can be opened with any browser, zoomed in and out, and for each observation there will be a diagnostic plot popping out when the user hovers with the pointer on top of the corresponding point in the plot.</p>
+<a class="reference internal image-reference" href="_images/residuals.jpg"><img alt="Interactive plot showing the residuals of the TOAs from all the missions in the work." class="align-center" src="_images/residuals.jpg" style="width: 100%;" />
+</a>
+</section>
+<section id="calculate-residuals-of-crab-toas-from-inconsistent-processing">
+<h2>Calculate residuals of Crab TOAs from inconsistent processing<a class="headerlink" href="#calculate-residuals-of-crab-toas-from-inconsistent-processing" title="Link to this heading">¶</a></h2>
+<p>Let us consider the <em>Suzaku</em> observation of the Crab performed at MJD 56000, and say we want to calculate the arrival time of the X-ray peak compared to the radio peak.
+We could in principle use the solution listed above to fold the data and calculate a TOA.
+However, we realize we barycentered the data using the DE421 solar system ephemeris, and using the most recent position of the source considering proper motion, while our reference ephemeris from Jodrell Bank uses DE200 and ignores proper motion.
+This might lead to a timing error up to a few ms, which is far larger than the needed precision for our TOA.
+Instead of re-barycentering the data using DE200 and a different position, we can do the following:</p>
+<ul class="simple">
+<li><p>We <em>simulate</em> a set of infinite-frequency TOAs <em>at the geocenter</em> using the timing solution above;</p></li>
+<li><p>Since the difference between TOAs at the geocenter using different ephemerides is tiny compared to the TOAs at the SSB, we assume these same TOAs remain the same using the DE421 ephemeris;</p></li>
+<li><p>we fit a new timing solution to these TOAs, using the DE421 ephemeris and the same position used for barycentering the X-ray data;</p></li>
+<li><p>we verify that the scatter of the TOAs with the new solution is much smaller than the declared rms scatter of the JBE;</p></li>
+</ul>
+<p>At this point, we have a new timing solution that is consistent with the JBE, but using the DE421 ephemeris.
+This procedure can easily be done using the PINT (Luo et al. 2021) software package, that supports a large set of timing models and JPL ephemerides.
+The solution can be saved in a TEMPO2-format parameter file, containing all the relevant information.
+The geocenter arrival time should be encoded in the <code class="docutils literal notranslate"><span class="pre">TZRMJD</span></code> key, using texttt{0} as observatory.
+The quality of the correction can be seen in Figure [[TBD]].</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="toa_extractor/index.html">toa_extractor Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="toa_extractor/index.html#reference-api">Reference/API</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper"><h3>Page Contents</h3>
+<ul>
+<li><a class="reference internal" href="#">TOA Extractor</a><ul>
+<li><a class="reference internal" href="#how-to-use-the-code">How to use the code</a></li>
+<li><a class="reference internal" href="#calculate-residuals-of-crab-toas-from-inconsistent-processing">Calculate residuals of Crab TOAs from inconsistent processing</a></li>
+</ul>
+</li>
+</ul>
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+<footer class="footer">
+  <p class="pull-right">
+    <a href="https://github.com/matteobachetti/toa_extractor/tree/main/docs/index.rst">Edit This Page on Github</a> &nbsp;
+    <a href="_sources/index.rst.txt"
+       rel="nofollow">Page Source</a> &nbsp;
+    <a href="#">Back to Top</a></p>
+  <p>
+    &copy; Copyright 2025, Matteo Bachetti.<br/>
+    Created using <a href="http://www.sphinx-doc.org/en/stable/">Sphinx</a> 8.2.3. &nbsp;
+    Last built 06 Sep 2025. <br/>
+  </p>
+</footer>
+  </body>
+</html>
