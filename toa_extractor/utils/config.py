@@ -63,6 +63,24 @@ def get_template(source, info=None):
         return os.path.join(template_dir, template_info["crab"]["default"])
 
 
+def get_image_config(config_file):
+    """Get image configuration with defaults."""
+    default_config = {"directory": "images", "max_width": 512, "quality": 85, "format": "JPEG"}
+
+    if config_file == "default" or not os.path.exists(config_file):
+        return default_config
+
+    config = read_config(config_file)
+    image_config = config.get("images", {})
+
+    # Merge with defaults
+    for key, default_value in default_config.items():
+        if key not in image_config:
+            image_config[key] = default_value
+
+    return image_config
+
+
 def load_yaml_file(infofile):
     with open(infofile) as fobj:
         return yaml.load(fobj, Loader=yaml.Loader)
