@@ -18,8 +18,11 @@ from .data_setup import (
     _get_and_normalize_phaseogram,
     _plot_phaseogram,
 )
-from .utils import encode_image_file, output_name, search_substring_in_list
-from .utils.config import load_yaml_file, read_config
+from .utils import (
+    output_name,
+    search_substring_in_list,
+)
+from .utils.config import load_yaml_file, read_config, get_image_config
 from .utils.fit_crab_profiles import (
     _plot_profile_and_fit,
     create_template_from_profile_table,
@@ -233,8 +236,10 @@ class TOAPipeline(luigi.Task):
         # best_freq_table = Table.read(best_freq_file)
         meta = profile_fit_table.meta
 
-        for key in "phase", "expo":
+        for key in "phase", "expo", "time":
+            log.debug(f"Removing {key} from metadata")
             meta.pop(key, None)
+
         for model_results_str in "best_fit", "model_init":
             data = meta.pop(model_results_str, None)
             if data is not None:
@@ -253,6 +258,9 @@ class TOAPipeline(luigi.Task):
             profile_fit_table.meta["phase_max_err"] / profile_fit_table.meta["F0"]
         )
 
+        # Get image configuration
+        image_config = get_image_config(self.config_file)
+
         outfile = self.output().path.replace(".txt", ".yaml")
 
         output_files = [outfile]
@@ -268,9 +276,18 @@ class TOAPipeline(luigi.Task):
                 local_residual_dict["fit_residual"] = meta["phase_max"] / meta["F0"]
                 local_residual_dict["fit_residual_err"] = meta["phase_max_err"] / meta["F0"]
                 local_image_file = search_substring_in_list(label + ".jpg", image_files)[0]
-                local_residual_dict["img"] = encode_image_file(local_image_file)
+
+                # Generate relative image path instead of base64
+                image_filename = "thumb_" + os.path.basename(local_image_file)
+                relative_path = os.path.join(image_config["directory"], image_filename)
+                local_residual_dict["img_path"] = relative_path
+                local_residual_dict["img_file"] = (
+                    local_image_file  # Keep reference to source for summary stage
+                )
+
                 local_outfile = self.output().path.replace(".txt", f"{label}.yaml")
-                for key in "phase", "expo":
+                for key in "phase", "expo", "time":
+                    log.debug(f"Removing {key} from metadata")
                     meta.pop(key, None)
                 for model_results_str in "best_fit", "model_init":
                     data = meta.pop(model_results_str, None)
@@ -284,7 +301,12 @@ class TOAPipeline(luigi.Task):
 
                 output_files.append(local_outfile)
 
-        residual_dict["img"] = encode_image_file(image_file)
+        # Generate relative image path for main diagnostic image
+        main_image_filename = "thumb_" + os.path.basename(image_file)
+        relative_path = os.path.join(image_config["directory"], main_image_filename)
+        residual_dict["img_path"] = relative_path
+        residual_dict["img_file"] = image_file  # Keep reference to source for summary stage
+
         with open(outfile, "w") as f:
             yaml.dump(residual_dict, f)
 
@@ -599,7 +621,6 @@ def main(args=None):
 
     config_file = args.config
     if config_file is None:
-
         config = read_config("default")
         config_file = "default_config.yaml"
         with open(config_file, "w") as file:
