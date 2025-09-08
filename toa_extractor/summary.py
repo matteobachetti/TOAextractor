@@ -32,6 +32,13 @@ def process_images_for_summary(result_table, output_csv_path, config_file="defau
     for idx, row in result_table.iterrows():
         img_path = row.get("img_path", "")
         img_file = row.get("img_file", "")
+        if not isinstance(img_path, str) or not isinstance(img_file, str):
+            log.error(
+                f"Invalid img_path or img_file at row {idx}: {img_path}, {img_file}. "
+                "Skipping image processing for this row."
+            )
+            result_table.at[idx, "img_path"] = ""
+            continue
 
         if img_path and img_file and os.path.exists(img_file):
             try:
