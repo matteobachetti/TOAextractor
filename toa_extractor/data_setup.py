@@ -247,10 +247,16 @@ class GetPhaseogram(luigi.Task):
         parfiles = [parfiles[i] for i in sorted_indices]
         model_epochs = model_epochs[sorted_indices]
 
-        fitsreader = FITSTimeseriesReader(
-            self.fname, output_class=EventList, additional_columns=["PRIOR"]
-        )
+        try:
+            fitsreader = FITSTimeseriesReader(
+                self.fname, output_class=EventList, additional_columns=["PRIOR"]
+            )
+        except OSError as e:
+            from hendrics.io import load_events
 
+            fitsreader = load_events(self.fname)
+        if fitsreader.dt > 0.5 / get_model(parfiles[0]).F0.value:
+            raise ValueError("Time resolution too low for folding")
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
 
         current_gtis = fitsreader.gti
