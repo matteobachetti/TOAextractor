@@ -40,14 +40,26 @@ and then install it using \texttt{pip}:
 
 How to use the code
 -------------------
+The code is designed to be run from the command line. Being based on the ``luigi`` workflow manager, it needs the ``luigid`` server to be running in the background, or alternative, to use a local scheduler that gets launched by the ``toaextract`` command using the ``--local-scheduler`` option.
+
 The starting point are photon event lists that have been preprocessed by the instrument teams and "barycentered" -- had their time measurements referred to the UT at the Solar System Barycenter (SSB) and not to the local time at the satellite.
 One can "fold" an observation to obtain the average pulse profile, fit the pulse profile with a combination of symmetric and asymmetric lines, and calculate the TOA (the arrival time of the peak of the pulsation) and the difference compared to the reference model by simply executing the command:
 
 .. code-block:: bash
 
+  $ toaextract path_to_file_name.fits --local-scheduler
+
+or, in case multiple runs are done at the same time, by launching the ``luigid`` server in a separate terminal window:
+
+.. code-block:: bash
+
+  $ luigid
+
+and then executing:
+.. code-block:: bash
   $ toaextract path_to_file_name.fits
 
-This will go through different steps, each of whom will produce one or more files with diagnostic data and plots like the one below. Long observations, or observations containing a large number of photons, will be split in shorter segments producing multiple diagnostic plots and TOAs. If everything goes smoothly, the results will be written in files ending by ``*results_*.yaml``.
+The ``toaextract`` command will go through different steps, each of whom will produce one or more files with diagnostic data and plots like the one below. Long observations, or observations containing a large number of photons, will be split in shorter segments producing multiple diagnostic plots and TOAs. If everything goes smoothly, the results will be written in files ending by ``*results_*.yaml``.
 
 .. image:: images/profile_fit.jpg
    :width: 100 %
