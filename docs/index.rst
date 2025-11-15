@@ -7,7 +7,7 @@ TOA Extractor allows to perform a standard timing analysis on X-ray data, creati
 
 + it is monitored by all missions regularly for spectral calibration;
 
-+ the Jodrell Bank radio telescope regularly publishes a monthly ephemeris of the Crab pulsar since 1987 [[CHECK]]
++ the Jodrell Bank radio telescope regularly publishes a monthly ephemeris of the Crab pulsar since 1987
 
 There are a few drawbacks of this approach:
 
@@ -17,6 +17,26 @@ There are a few drawbacks of this approach:
 
 TOA Extractor solves the first bullet point and, in part, the second. To accommodate different JPL ephemerides and source position, we refit the JB ephemeris to the new parameters using simulated data (see below). The code also contains methods to correct the pulse profile from dead time (using the information on prior livetime shared by some missions) and pile-up (at the moment, it is only applied to Chandra-HRC data).
 Future work will address the third point by adding other pulsars to the calibrators.
+
+Installation instructions
+-------------------------
+The easiest way to install TOA Extractor is by using \texttt{pip}:
+
+.. code-block:: bash
+
+  $ pip install toa-extractor
+
+Otherwise, one can clone the repository from GitHub:
+.. code-block:: bash
+
+  $ git clone https://github.com/matteobachetti/toa-extractor.git
+
+and then install it using \texttt{pip}:
+.. code-block:: bash
+
+  $ cd toa-extractor
+  $ pip install .
+
 
 How to use the code
 -------------------
