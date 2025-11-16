@@ -460,7 +460,7 @@ def main(args=None):
         dataset,
         glitch_data,
         width=1200,
-        height=600,
+        height=800,
         res_label=rf"$$\Delta{{\rm TOA}} ({time_units_str})$$",
     )
 
