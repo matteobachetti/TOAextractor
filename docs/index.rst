@@ -56,7 +56,9 @@ or, in case multiple runs are done at the same time, by launching the ``luigid``
   $ luigid
 
 and then executing:
+
 .. code-block:: bash
+
   $ toaextract path_to_file_name.fits
 
 The ``toaextract`` command will go through different steps, each of whom will produce one or more files with diagnostic data and plots like the one below. Long observations, or observations containing a large number of photons, will be split in shorter segments producing multiple diagnostic plots and TOAs. If everything goes smoothly, the results will be written in files ending by ``*results_*.yaml``.
