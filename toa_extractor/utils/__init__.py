@@ -116,6 +116,16 @@ def encode_image_file(image_file):
     return base64_encoded_result_str
 
 
+def get_file_time(fname):
+    """Get the creation or modification time of a file."""
+    st = os.stat(fname)
+    if hasattr(st, "st_birthtime"):
+        return st.st_birthtime
+    if os.name == "nt":
+        return st.st_ctime
+    return st.st_mtime
+
+
 def process_and_copy_image(source_image_path, target_image_path, image_config):
     """
     Process and copy image according to configuration.
@@ -137,6 +147,18 @@ def process_and_copy_image(source_image_path, target_image_path, image_config):
     # Ensure target directory exists
     target_dir = os.path.dirname(target_image_path)
     os.makedirs(target_dir, exist_ok=True)
+
+    # If source and target are the same path, nothing to do
+    if os.path.abspath(source_image_path) == os.path.abspath(target_image_path):
+        return target_image_path
+
+    # If target exists and is newer than source, skip processing
+    if os.path.exists(target_image_path) and os.path.exists(source_image_path):
+        try:
+            if get_file_time(target_image_path) > get_file_time(source_image_path):
+                return target_image_path
+        except Exception:
+            pass
 
     try:
         img = Image.open(source_image_path)
