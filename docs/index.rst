@@ -26,10 +26,17 @@ The easiest way to install TOA Extractor is by using \texttt{pip}:
 
   $ pip install toa-extractor
 
-Otherwise, one can clone the repository from GitHub:
+For the latest development version, one can install directly from GitHub:
+
 .. code-block:: bash
 
-  $ git clone https://github.com/matteobachetti/toa-extractor.git
+  $ pip install git+https://github.com/matteobachetti/toa-extractor.git
+
+Otherwise, one can clone the repository from GitHub:
+
+.. code-block:: bash
+
+  $ git clone git+https://github.com/matteobachetti/toa-extractor.git
 
 and then install it using \texttt{pip}:
 .. code-block:: bash
