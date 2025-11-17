@@ -105,6 +105,7 @@ class TestGetFileTime:
         try:
             file_time = get_file_time(tmp_path)
             assert isinstance(file_time, (int, float))
+            time.sleep(1)
             now = time.time()
             assert file_time < now
             assert file_time > now - 60
