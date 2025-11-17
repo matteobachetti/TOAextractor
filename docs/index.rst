@@ -39,6 +39,7 @@ Otherwise, one can clone the repository from GitHub:
   $ git clone git+https://github.com/matteobachetti/toa-extractor.git
 
 and then install it using \texttt{pip}:
+
 .. code-block:: bash
 
   $ cd toa-extractor
