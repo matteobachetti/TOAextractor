@@ -82,7 +82,9 @@ def output_name(filename, version, suffix):
     'file_v3_folded.h5'
     """
     newf = root_name(filename)
-    if version is not None and version.lower() != "none":
+    if version is None:
+        newf += "_none"
+    else:
         newf += "_" + version.lstrip("_")
 
     if not suffix.startswith("."):
