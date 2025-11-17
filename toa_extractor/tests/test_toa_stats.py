@@ -12,6 +12,13 @@ def create_fake_summary_file():
         "ephem": ["DE200"] * 24,
         "fit_residual": np.random.normal(0, 1e-6, size=24),
         "fit_residual_err": np.random.chisquare(2, size=24) / 1e6,
+        "best_fit_amplitude_0": np.random.uniform(5, 20, size=24),
+        "best_fit_amplitude_1": np.random.uniform(0, 5, size=24),
+        "best_fit_amplitude00_2": np.random.uniform(0, 0.5, size=24),
+        "best_fit_amplitude01_2": np.random.uniform(0, 0.5, size=24),
+        "best_fit_amplitude10_2": np.random.uniform(0, 0.5, size=24),
+        "best_fit_amplitude11_2": np.random.uniform(0, 0.5, size=24),
+        "countrate": np.random.uniform(50, 500, size=24),
     }
     df = Table(data)
     df = vstack([df, df])  # Duplicate the data to have more entries

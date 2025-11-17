@@ -37,6 +37,16 @@ def get_data(fname, freq_units="mHz", time_units="us", res_label="fit_residual")
         df[res_label + f"_{time_units}" + diff_str] = df[col] * factor
 
     res_label = res_label + f"_{time_units}"
+    total_ampl = np.array(df["best_fit_amplitude_0"])
+    base = np.array(df["best_fit_amplitude_1"]) * total_ampl
+    peak_height = (
+        np.array(df["best_fit_amplitude00_2"]) + np.array(df["best_fit_amplitude10_2"])
+    ) * total_ampl
+
+    scatter = np.sqrt(base + 0.75) + 1  # From Israel 1968, SRL internal report
+    peak_to_noise = peak_height / scatter
+    df["scatter"] = scatter
+    df["snr"] = peak_to_noise
 
     df["mission+instr"] = [f"{m}/{ins.upper()}" for m, ins in zip(df["mission"], df["instrument"])]
     # APPLY OFFSETS -------
@@ -280,11 +290,11 @@ def plot_residuals(
                 border="2"
                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
             ></img>
-            <div style={style}">
+            <!-- <div style={style}">
                 <span style="color: #666; text-align: center;">
                 Diagnostic plot<br/>not available
                 </span>
-            </div>
+            </div> -->
         </div>
         <div>
             <span style="font-size: 17px; font-weight: bold;">@mission</span>
@@ -358,19 +368,32 @@ def plot_residuals(
         "dot",
     ]
     markers = factor_mark("mission", MARKERS, factors=all_missions)
+    number_of_glyphs = []
+    for m in mission_ephem_combs:
+        number_of_glyphs.append(len(df[df["mission+ephem"] == m]))
+
+    mission_ephem_combs = sorted(
+        mission_ephem_combs, key=lambda x: -number_of_glyphs[mission_ephem_combs.index(x)]
+    )
+
     for m in mission_ephem_combs:
         group = GroupFilter(column_name="mission+ephem", group=m)
         # source = df
         view = CDSView(filter=group)
 
         df_filt = full_dataset.to_df()[df["mission+ephem"] == m]
+
+        peak_to_noise = np.asarray(df_filt["snr"])
+        good = peak_to_noise > 3
+        df_filt = df_filt[good]
+
         # source = ColumnDataSource(df_filt)
         filt_source = ColumnDataSource(df_filt)
 
         p.scatter(
             x="mjd",
             y="delta_t",
-            source=full_dataset,
+            source=filt_source,
             size=10,
             color=color,
             legend_label=m,
@@ -460,7 +483,7 @@ def main(args=None):
         dataset,
         glitch_data,
         width=1200,
-        height=600,
+        height=800,
         res_label=rf"$$\Delta{{\rm TOA}} ({time_units_str})$$",
     )
 

@@ -3,6 +3,7 @@ import copy
 from collections.abc import Iterable
 from io import StringIO
 from urllib.request import urlopen
+import urllib.error
 import time
 
 import astropy.units as u
@@ -54,6 +55,41 @@ def file_is_outdated(file_name, time_limit=1 * u.day):
     return bool((time.time() - mod_time) > time_limit.to(u.s).value)
 
 
+def retry_urlopen(url, attempts=4, delay=1, timeout=10):
+    """Try to open a URL with retries.
+
+    Parameters
+    ----------
+    url : str
+        The URL to open.
+    attempts : int
+        The number of attempts to try.
+    delay : int
+        The delay between attempts in seconds.
+    timeout : int
+        The timeout for each urlopen attempt in seconds.
+
+    Returns
+    -------
+    response : HTTPResponse
+        The response object from urlopen.
+
+    Raises
+    ------
+    urllib.error.URLError
+        If all attempts fail, the last URLError is raised.
+    """
+    for attempt in range(attempts):
+        try:
+            response = urlopen(url, timeout=timeout)
+        except urllib.error.URLError as e:
+            log.warning(f"Attempt {attempt + 1} failed: {e}")
+            time.sleep(delay)
+        else:
+            return response
+    raise urllib.error.URLError(f"All {attempts} attempts to open {url} failed.")
+
+
 def retrieve_txt_ephemeris():
     """Retrieve the Crab pulsar ephemeris from the Jodrell Bank website in text format.
 
@@ -71,7 +107,8 @@ def retrieve_txt_ephemeris():
     file_name = "Crab.txt"
     url = "https://www.jb.man.ac.uk/~pulsar/crab/crab2.txt"
     if file_is_outdated(file_name):
-        response = urlopen(url, timeout=10)
+        response = retry_urlopen(url, attempts=4, delay=2, timeout=10)
+
         data = response.read()
         with open(file_name, "wb") as fobj:
             fobj.write(data)
@@ -136,7 +173,7 @@ def retrieve_cgro_ephemeris():
     url = "http://www.jb.man.ac.uk/pulsar/crab/all.gro"
 
     if file_is_outdated(file_name):
-        response = urlopen(url, timeout=10)
+        response = retry_urlopen(url, attempts=4, delay=2, timeout=10)
         data = response.read()
         with open(file_name, "wb") as out_file:
             out_file.write(

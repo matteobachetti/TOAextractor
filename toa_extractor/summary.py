@@ -78,6 +78,9 @@ def main(args=None):
 
     args = parser.parse_args(args)
 
+    if os.path.exists(args.output):
+        result_table = pd.read_csv(args.output)
+
     result_table = None
     for fname in args.files:
         log.info(f"Processing {fname}")
