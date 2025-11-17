@@ -115,6 +115,18 @@ def get_toa_stats(
     if not os.path.exists(summary_fname):
         raise FileNotFoundError(f"Summary file {summary_fname} does not exist.")
     table = Table.read(summary_fname)
+    total_ampl = np.array(table["best_fit_amplitude_0"])
+    base = np.array(table["best_fit_amplitude_1"]) * total_ampl
+    peak_height = (
+        np.array(table["best_fit_amplitude00_2"]) + np.array(table["best_fit_amplitude10_2"])
+    ) * total_ampl
+
+    scatter = np.sqrt(base + 0.75) + 1  # From Israel 1968, SRL internal report
+    peak_to_noise = peak_height / scatter
+    table["scatter"] = scatter
+    table["snr"] = peak_to_noise
+    table["pulsed_fraction"] = peak_height / (peak_height + base)
+    good = table["snr"] > 2
 
     table["rough_mjd"] = [float(f"{mjd:.2f}") for mjd in table["mjd"]]
 
@@ -154,7 +166,15 @@ def get_toa_stats(
 
             else:
                 diffs = {}
-            subsubtable = subsub["obsid", "mjd", "rough_mjd", "fit_residual", "fit_residual_err"]
+            subsubtable = subsub[
+                "obsid",
+                "mjd",
+                "rough_mjd",
+                "fit_residual",
+                "fit_residual_err",
+                "countrate",
+                "pulsed_fraction",
+            ]
             subsubtable = subsubtable.group_by(["obsid", "rough_mjd"]).groups.aggregate(np.mean)
             for key, val in diffs.items():
                 subsubtable[key] = val
@@ -165,7 +185,14 @@ def get_toa_stats(
 
         subsubtable_aggr = vstack(subsubtable_list)
 
-        columns = ["obsid", "mjd", "fit_residual", "fit_residual_err"] + list(set(ephem_cols))
+        columns = [
+            "obsid",
+            "mjd",
+            "fit_residual",
+            "fit_residual_err",
+            "countrate",
+            "pulsed_fraction",
+        ] + list(set(ephem_cols))
         print(subsubtable_aggr[columns])
         mission_table_fname = out_fname.replace(".csv", f"_{mission}_{instrument}.csv")
         subsubtable_aggr[columns].write(
@@ -202,39 +229,56 @@ def get_toa_stats(
             mean_residual = np.nanmean(subsubtable_aggr["fit_residual"]) + offset
             std_residual = np.nan
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
+            mean_ctrate = np.nanmean(subsubtable_aggr["countrate"])
+            mean_pulsed_fraction = np.nanmean(subsubtable_aggr["pulsed_fraction"])
         elif n_meas > 20:
             mean_residual = np.median(subsubtable_aggr["fit_residual"]) + offset
 
             std_residual = median_abs_deviation(subsubtable_aggr["fit_residual"], scale="normal")
             mean_stat_err = np.median(subsubtable_aggr["fit_residual_err"])
+            mean_ctrate = np.median(subsubtable_aggr["countrate"])
+            mean_pulsed_fraction = np.median(subsubtable_aggr["pulsed_fraction"])
         else:
             mean_residual = np.nanmean(subsubtable_aggr["fit_residual"]) + offset
 
             std_residual = np.nanstd(subsubtable_aggr["fit_residual"])
             mean_stat_err = np.nanmean(subsubtable_aggr["fit_residual_err"])
-
+            mean_ctrate = np.nanmean(subsubtable_aggr["countrate"])
+            mean_pulsed_fraction = np.nanmean(subsubtable_aggr["pulsed_fraction"])
+        min_mjd = np.nanmin(subsubtable_aggr["rough_mjd"])
+        max_mjd = np.nanmax(subsubtable_aggr["rough_mjd"])
         mean_residual_approx = float(f"{mean_residual * 1e6:.2e}")
         std_residual_approx = float(f"{std_residual * 1e6:.1e}")
         mean_stat_err_approx = float(f"{mean_stat_err * 1e6:.1e}")
+        mean_ctrate_approx = float(f"{mean_ctrate:.2e}")
+        mean_pulsed_fraction_approx = float(f"{mean_pulsed_fraction * 100:.1e}")
 
         lines.append(
             [
                 mission.upper(),
                 instrument.upper(),
+                f"{min_mjd:.2f}".replace("nan", "--"),
+                f"{max_mjd:.2f}".replace("nan", "--"),
                 n_meas,
                 f"{mean_residual_approx:g}".replace("nan", "--") + label,
                 f"{std_residual_approx:g}".replace("nan", "--"),
                 f"{mean_stat_err_approx:g}".replace("nan", "--"),
+                f"{mean_ctrate_approx:g}".replace("nan", "--"),
+                f"{mean_pulsed_fraction_approx:g}".replace("nan", "--"),
             ]
         )
 
     names = [
         "Mission",
         "Instrument",
+        "Min MJD",
+        "Max MJD",
         "$N$",
         r"$r_{\rm mean}$ (us)",
         r"$\sigma$ (us)",
         r"$\sigma_{\rm stat}$ (us)",
+        "Rate",
+        "Pulsed Fraction",
     ]
     final_table = Table(
         rows=lines,
