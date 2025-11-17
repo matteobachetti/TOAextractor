@@ -142,6 +142,7 @@ class TestProcessAndCopyImage:
             assert os.path.exists(result)
             processed_img = Image.open(result)
             assert processed_img.width <= 512
+            processed_img.close()
 
     def test_target_newer_than_source(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
