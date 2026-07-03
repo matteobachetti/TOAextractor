@@ -365,6 +365,8 @@ def get_observing_info(evfile, hduname=1):
             exposure = header["EXPOSURE"]
         elif "TSTOP" in header and "TSTART" in header:
             exposure = header["TSTOP"] - header["TSTART"]
+        else:
+            exposure = hdul[1].data["TIME"][-1] - hdul[1].data["TIME"][0]
 
         if exposure <= 0:
             raise ValueError(f"Invalid or zero exposure time in {evfile} in HDU {hduname}")
