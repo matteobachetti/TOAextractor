@@ -361,9 +361,14 @@ def get_observing_info(evfile, hduname=1):
         if nphot == 0:
             raise ValueError(f"No photons found in {evfile} in HDU {hduname}")
 
-        if "EXPOSURE" in header:
+        if "EXPOSURE" in header and header["EXPOSURE"] is not None:
             exposure = header["EXPOSURE"]
-        elif "TSTOP" in header and "TSTART" in header:
+        elif (
+            "TSTOP" in header
+            and "TSTART" in header
+            and header["TSTOP"] is not None
+            and header["TSTART"] is not None
+        ):
             exposure = header["TSTOP"] - header["TSTART"]
         else:
             exposure = hdul[1].data["TIME"][-1] - hdul[1].data["TIME"][0]
