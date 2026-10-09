@@ -61,3 +61,17 @@ def test_select_n_files_gt_nmax():
     # Must be two files, from two different directories
     assert len(files) == 2
     assert len(set(os.path.split(f)[0] for f in files)) == 2
+
+
+def test_config_with_ignore_gtis(tmp_path):
+    """--ignore-gtis writes a copy of the config with ignore_gtis set; the original is unchanged."""
+    from toa_extractor.pipeline import _config_with_ignore_gtis
+    from toa_extractor.utils.config import read_config
+
+    config_file = str(tmp_path / "myconfig.yaml")
+    with open(config_file, "w") as fobj:
+        fobj.write("format: cgro\n")
+    new_config_file = _config_with_ignore_gtis(config_file)
+    assert new_config_file != config_file
+    assert read_config(new_config_file) == {"format": "cgro", "ignore_gtis": True}
+    assert "ignore_gtis" not in read_config(config_file)

@@ -398,8 +398,10 @@ def refit_solution(
             model_200.PEPOCH.value, ephem=new_ephem, force_parameters=force_parameters
         )
 
-    t0_mjd = np.longdouble(model_200.START.value) - 1
-    t1_mjd = np.longdouble(model_200.FINISH.value) + 1
+    # Half a day outside the validity range: the fit sets START and FINISH to the first and last
+    # fake TOA, and a TOA at midnight can fall inside a leap second, which pulsar_mjd cannot hold.
+    t0_mjd = np.longdouble(model_200.START.value) - 0.5
+    t1_mjd = np.longdouble(model_200.FINISH.value) + 0.5
 
     model_new_start = copy.deepcopy(model_200)
     model_new_start.F0.frozen = False

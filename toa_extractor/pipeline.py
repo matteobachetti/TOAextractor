@@ -578,6 +578,19 @@ def select_n_files_per_directory(files, nmax, config_file=None, version="none"):
     return fnames
 
 
+def _config_with_ignore_gtis(config_file):
+    """Write a copy of the configuration with ``ignore_gtis: True`` and return its name.
+
+    Options reach the luigi tasks only through the configuration file.
+    """
+    config = copy.deepcopy(read_config(config_file))
+    config["ignore_gtis"] = True
+    new_config_file = os.path.splitext(config_file)[0] + "_ignore_gtis.yaml"
+    with open(new_config_file, "w") as file:
+        yaml.dump(config, file)
+    return new_config_file
+
+
 def main(args=None):
     import argparse
 
@@ -596,6 +609,11 @@ def main(args=None):
         type=int,
         default=None,
     )
+    parser.add_argument(
+        "--ignore-gtis",
+        help="Ignore the GTIs in the files and use all events (only if the GTIs are wrong)",
+        action="store_true",
+    )
 
     args = parser.parse_args(args)
 
@@ -613,6 +631,9 @@ def main(args=None):
         config_file = "default_config.yaml"
         with open(config_file, "w") as file:
             yaml.dump(config, file)
+
+    if args.ignore_gtis:
+        config_file = _config_with_ignore_gtis(config_file)
 
     config = read_config(config_file)
     fnames = args.files
@@ -654,6 +675,11 @@ def main_freq(args=None):
         type=int,
         default=None,
     )
+    parser.add_argument(
+        "--ignore-gtis",
+        help="Ignore the GTIs in the files and use all events (only if the GTIs are wrong)",
+        action="store_true",
+    )
 
     args = parser.parse_args(args)
 
@@ -672,6 +698,9 @@ def main_freq(args=None):
         config_file = "default_config.yaml"
         with open(config_file, "w") as file:
             yaml.dump(config, file)
+
+    if args.ignore_gtis:
+        config_file = _config_with_ignore_gtis(config_file)
 
     fnames = args.files
     if args.nmax is not None:
