@@ -254,6 +254,9 @@ class GetPhaseogram(luigi.Task):
         model_epochs_met = (model_epochs - fitsreader.mjdref) * 86400
 
         current_gtis = fitsreader.gti
+        if config.get("ignore_gtis", False):
+            log.info("Ignoring the GTIs in the file: using the whole span of the events.")
+            current_gtis = None
         if current_gtis is None:
             current_gtis = np.array([[fitsreader.time[0], fitsreader.time[-1]]])
             fitsreader.gti = current_gtis
@@ -420,7 +423,7 @@ class GetPulseFreq(luigi.Task):
 
         fitsreader = FITSTimeseriesReader(self.fname, output_class=EventList)
         events = fitsreader[:]
-        if events.gti is not None:
+        if events.gti is not None and not read_config(self.config_file).get("ignore_gtis", False):
             n_before = events.time.size
             events.apply_gtis()
             n_dropped = n_before - events.time.size

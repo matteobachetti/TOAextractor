@@ -45,14 +45,20 @@ def _run_phaseogram(fname, ignore_gtis):
     return [Table.read(f) for f in dynprofs]
 
 
-def test_phaseogram_truncated_gti(truncated_gti_file):
-    """Events outside the GTIs must not be folded.
+@pytest.mark.parametrize("ignore_gtis", [False, True])
+def test_phaseogram_truncated_gti(truncated_gti_file, ignore_gtis):
+    """Events outside the GTIs must not be folded, unless the GTIs are explicitly ignored.
 
     Folding them used an extrapolated phase spline, which bent the phaseogram. (The warning
     about dropped events is emitted in a luigi child process, so it cannot be caught here.)
     """
-    fname, gti, _, n_in_gti = truncated_gti_file
-    tables = _run_phaseogram(fname, ignore_gtis=False)
-    assert sum(np.sum(t["profile"]) for t in tables) == n_in_gti
-    for t in tables:
-        assert t.meta["time"][0] >= gti[0, 0]
+    fname, gti, n_total, n_in_gti = truncated_gti_file
+    tables = _run_phaseogram(fname, ignore_gtis=ignore_gtis)
+    n_folded = sum(np.sum(t["profile"]) for t in tables)
+    if ignore_gtis:
+        # The phaseogram histogram leaves out the very last event (right edge of the range)
+        assert n_folded == n_total - 1
+    else:
+        assert n_folded == n_in_gti
+        for t in tables:
+            assert t.meta["time"][0] >= gti[0, 0]

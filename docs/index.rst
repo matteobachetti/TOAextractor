@@ -95,6 +95,17 @@ which will produce an html file with an interactive plot of the results. The plo
    :alt: Interactive plot showing the residuals of the TOAs from all the missions in the work.
    :align: center
 
+Good Time Intervals
+~~~~~~~~~~~~~~~~~~~
+Only events inside the Good Time Intervals (GTIs) of the event file are folded. The pulse phase is
+calculated with a spline sampled between the start of the first GTI and the end of the last one, so
+events outside the GTIs would get a phase extrapolated from the spline, which can be wrong by a large
+fraction of a cycle. If any events are dropped, ``toaextract`` warns with their number and fraction.
+A large fraction usually means that the GTI extension of the file is wrong. If the event times are
+known to be correct, ``--ignore-gtis`` makes ``toaextract`` (and ``toafreq``) use the whole span of
+the events instead. The option is passed to the tasks through a copy of the configuration file with
+``ignore_gtis: true``, named ``<config>_ignore_gtis.yaml``.
+
 
 Calculate residuals of Crab TOAs from inconsistent processing
 -------------------------------------------------------------
