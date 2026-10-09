@@ -298,8 +298,17 @@ class GetPhaseogram(luigi.Task):
 
         nbin = 512
         output_files = []
+        n_read = n_dropped = 0
 
         for subprofile_count, events in enumerate(fitsreader.apply_gti_lists(split_gti)):
+            # apply_gti_lists only cuts the time range spanned by the GTIs; events in gaps or
+            # outside the GTIs would be folded with an extrapolated phase.
+            n_before = events.time.size
+            events.apply_gtis()
+            n_read += n_before
+            n_dropped += n_before - events.time.size
+            if events.time.size == 0:
+                continue
             mjdstart = events.gti[0, 0] / 86400 + events.mjdref
             mjdstop = events.gti[-1, 1] / 86400 + events.mjdref
 
@@ -379,6 +388,13 @@ class GetPhaseogram(luigi.Task):
             result_table.write(new_file_name, overwrite=True, serialize_meta=True)
             output_files.append(new_file_name)
 
+        if n_dropped > 0:
+            warnings.warn(
+                f"{self.fname}: {n_dropped} of {n_read} events ({n_dropped / n_read:.1%}) "
+                "were outside the GTIs and were not folded. If the GTIs are known to be wrong, "
+                "use --ignore-gtis."
+            )
+
         if not output_files:
             raise RuntimeError("No phaseogram could be created.")
 
@@ -404,6 +420,15 @@ class GetPulseFreq(luigi.Task):
 
         fitsreader = FITSTimeseriesReader(self.fname, output_class=EventList)
         events = fitsreader[:]
+        if events.gti is not None:
+            n_before = events.time.size
+            events.apply_gtis()
+            n_dropped = n_before - events.time.size
+            if n_dropped > 0:
+                warnings.warn(
+                    f"{self.fname}: {n_dropped} of {n_before} events "
+                    f"({n_dropped / n_before:.1%}) were outside the GTIs and were not used."
+                )
         if hasattr(events, "tdb"):
             events.time = events.tdb
 
